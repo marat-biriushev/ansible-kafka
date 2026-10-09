@@ -1,0 +1,27 @@
+---
+# Runs on one broker (playbooks use hosts: kafka[0]) and talks to the
+# cluster over the INTERNAL listener with /etc/kafka/admin.properties.
+kafka_users_kafka_home: /opt/kafka
+kafka_users_admin_config: /etc/kafka/admin.properties
+kafka_users_bootstrap_server: >-
+  {{ inventory_hostname ~ (('.' ~ kafka_domain) if kafka_domain | default('') else '') }}:9091
+
+# SCRAM-SHA-512 service accounts: [{name: ..., password: ...}]
+# Passwords come from the vault. "admin" is created when the storage is
+# formatted and is not managed here.
+kafka_users_scram: []
+kafka_users_scram_iterations: 8192
+# A salted hash of each password is kept here so that a password change in
+# the vault is noticed and re-applied; the plain password is never stored.
+kafka_users_state_dir: /var/lib/kafka-ansible/scram
+kafka_users_hash_salt: "{{ kafka_cluster_id | default('kafka') }}"
+
+# ACLs: missing bindings are added, nothing is ever removed.
+# - principal: User:kafka-ui
+#   resource_type: topic        # topic | group | cluster | transactional-id
+#   name: "*"                   # not used for cluster
+#   pattern_type: literal       # literal | prefixed
+#   operations: [Describe, Read]
+#   host: "*"                   # optional
+#   permission: allow           # optional: allow | deny
+kafka_users_acls: []

@@ -1,0 +1,30 @@
+---
+- name: List the topics in the cluster
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_topics_kafka_home }}/bin/kafka-topics.sh"
+      - --bootstrap-server
+      - "{{ kafka_topics_bootstrap_server }}"
+      - --command-config
+      - "{{ kafka_topics_admin_config }}"
+      - --list
+  register: kafka_topics_existing
+  changed_when: false
+  check_mode: false
+
+- name: Create the missing topics
+  ansible.builtin.command:
+    argv: >-
+      {{ [kafka_topics_kafka_home ~ '/bin/kafka-topics.sh',
+          '--bootstrap-server', kafka_topics_bootstrap_server,
+          '--command-config', kafka_topics_admin_config,
+          '--create', '--topic', item.name,
+          '--partitions', item.partitions | default(1) | string,
+          '--replication-factor', item.replication_factor | default(3) | string]
+         + (item.config | default({}) | dict2items
+            | map(attribute='key') | zip(item.config | default({}) | dict2items | map(attribute='value'))
+            | map('join', '=') | map('regex_replace', '^', '--config=') | list) }}
+  loop: "{{ kafka_topics_list | rejectattr('name', 'in', kafka_topics_existing.stdout_lines) | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: true

@@ -1,0 +1,32 @@
+---
+# Generated from defaults/main.yml; keep the two in sync.
+argument_specs:
+  main:
+    short_description: SCRAM-SHA-512 service accounts and their ACLs, idempotently
+    options:
+      kafka_users_kafka_home:
+        description: Kafka home on the broker that runs the admin tools.
+        type: str
+      kafka_users_admin_config:
+        description: admin.properties (mTLS) for the admin tools.
+        type: str
+      kafka_users_bootstrap_server:
+        description: INTERNAL listener of this broker.
+        type: str
+      kafka_users_scram:
+        description: Service accounts, [{name, password}]. Passwords from the vault.
+        type: list
+        elements: dict
+      kafka_users_scram_iterations:
+        description: SCRAM iterations.
+        type: int
+      kafka_users_state_dir:
+        description: Where salted password hashes are kept to detect password changes.
+        type: str
+      kafka_users_hash_salt:
+        description: Salt of those hashes.
+        type: str
+      kafka_users_acls:
+        description: ACL bindings to ensure; missing ones are added, none are removed.
+        type: list
+        elements: dict

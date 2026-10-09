@@ -1,0 +1,14 @@
+---
+# Service topics that must exist before the services start (e.g. _schemas
+# for Schema Registry). Missing topics are created; existing ones are left
+# as they are. Application topics are out of scope for this repository.
+# - name: _schemas
+#   partitions: 1
+#   replication_factor: 3
+#   config: {cleanup.policy: compact, min.insync.replicas: 2}
+kafka_topics_list: []
+
+kafka_topics_kafka_home: /opt/kafka
+kafka_topics_admin_config: /etc/kafka/admin.properties
+kafka_topics_bootstrap_server: >-
+  {{ inventory_hostname ~ (('.' ~ kafka_domain) if kafka_domain | default('') else '') }}:9091

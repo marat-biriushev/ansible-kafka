@@ -1,0 +1,19 @@
+---
+# Generated from defaults/main.yml; keep the two in sync.
+argument_specs:
+  main:
+    short_description: Service topics that must exist before the services start
+    options:
+      kafka_topics_list:
+        description: Topics to create if missing, [{name, partitions, replication_factor, config}].
+        type: list
+        elements: dict
+      kafka_topics_kafka_home:
+        description: Kafka home on the broker that runs the admin tools.
+        type: str
+      kafka_topics_admin_config:
+        description: admin.properties (mTLS) for the admin tools.
+        type: str
+      kafka_topics_bootstrap_server:
+        description: INTERNAL listener of this broker.
+        type: str

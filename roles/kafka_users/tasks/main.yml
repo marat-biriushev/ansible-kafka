@@ -1,0 +1,119 @@
+---
+- name: Check the SCRAM accounts
+  ansible.builtin.assert:
+    that:
+      - item.name is match('^[A-Za-z0-9._-]+$')
+      - item.password | default('') | length >= 12
+      # kafka-configs parses iterations=..,password=.. inside [ ]
+      - item.password is not search('[,\[\]"=\s]')
+    fail_msg: >-
+      SCRAM account {{ item.name }}: the password must be set in the vault, 12+ characters,
+      none of , [ ] " = or spaces.
+    quiet: true
+  loop: "{{ kafka_users_scram }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: List the SCRAM accounts in the cluster
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_users_kafka_home }}/bin/kafka-configs.sh"
+      - --bootstrap-server
+      - "{{ kafka_users_bootstrap_server }}"
+      - --command-config
+      - "{{ kafka_users_admin_config }}"
+      - --describe
+      - --entity-type
+      - users
+  register: kafka_users_existing
+  changed_when: false
+  check_mode: false
+
+- name: Create the state directory
+  ansible.builtin.file:
+    path: "{{ kafka_users_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Read the stored password hashes
+  ansible.builtin.slurp:
+    src: "{{ kafka_users_state_dir }}/{{ item.name }}.sha256"
+  loop: "{{ kafka_users_scram }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: kafka_users_hashes
+  failed_when: false
+  no_log: true
+
+- name: Create or update the SCRAM accounts
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_users_kafka_home }}/bin/kafka-configs.sh"
+      - --bootstrap-server
+      - "{{ kafka_users_bootstrap_server }}"
+      - --command-config
+      - "{{ kafka_users_admin_config }}"
+      - --alter
+      - --entity-type
+      - users
+      - --entity-name
+      - "{{ item.0.name }}"
+      - --add-config
+      - "SCRAM-SHA-512=[iterations={{ kafka_users_scram_iterations }},password={{ item.0.password }}]"
+  loop: "{{ kafka_users_scram | zip(kafka_users_hashes.results) | list }}"
+  loop_control:
+    label: "{{ item.0.name }}"
+  when: >-
+    ("user-principal '" ~ item.0.name ~ "' are SCRAM-SHA-512") not in kafka_users_existing.stdout
+    or (item.1.content | default('') | b64decode | trim) != _hash
+  vars:
+    _hash: "{{ (kafka_users_hash_salt ~ ':' ~ item.0.name ~ ':' ~ item.0.password) | hash('sha256') }}"
+  changed_when: true
+  no_log: true
+
+- name: Store the password hashes
+  ansible.builtin.copy:
+    dest: "{{ kafka_users_state_dir }}/{{ item.name }}.sha256"
+    content: "{{ (kafka_users_hash_salt ~ ':' ~ item.name ~ ':' ~ item.password) | hash('sha256') }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ kafka_users_scram }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: List the ACLs in the cluster
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_users_kafka_home }}/bin/kafka-acls.sh"
+      - --bootstrap-server
+      - "{{ kafka_users_bootstrap_server }}"
+      - --command-config
+      - "{{ kafka_users_admin_config }}"
+      - --list
+  register: kafka_users_acls_existing
+  changed_when: false
+  check_mode: false
+
+- name: Add the missing ACLs
+  ansible.builtin.command:
+    argv: >-
+      {{ [kafka_users_kafka_home ~ '/bin/kafka-acls.sh',
+          '--bootstrap-server', kafka_users_bootstrap_server,
+          '--command-config', kafka_users_admin_config,
+          '--add',
+          '--' ~ item.permission ~ '-principal', item.principal,
+          '--' ~ item.permission ~ '-host', item.host,
+          '--operation', item.operation,
+          '--resource-pattern-type', item.pattern_type]
+         + (['--cluster'] if item.resource_type == 'cluster' else ['--' ~ item.resource_type, item.name]) }}
+  loop: >-
+    {{ kafka_users_acls | kafka_acls_expand
+       | rejectattr('key', 'in', kafka_users_acls_existing.stdout | kafka_acls_parse) | list }}
+  loop_control:
+    label: "{{ item.principal }} {{ item.operation }} {{ item.resource_type }}:{{ item.name }}"
+  changed_when: true
