@@ -1,0 +1,108 @@
+---
+# Runs on a developer machine with internet access and Docker (not on the
+# control node):
+#   python -m pip install molecule "molecule-plugins[docker]"
+#   scripts/fetch-artifacts.sh   # Kafka tarball and javaagent jar into artifacts/
+#   molecule test
+dependency:
+  name: galaxy
+  options:
+    requirements-file: ${MOLECULE_PROJECT_DIRECTORY}/requirements.yml
+driver:
+  name: docker
+platforms:
+  - name: int-res-test-kafka01
+    image: almalinux/10-init
+    command: /usr/sbin/init
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /tmp
+    networks:
+      - name: kafka-molecule
+    groups:
+      - kafka
+  - name: int-res-test-kafka02
+    image: almalinux/10-init
+    command: /usr/sbin/init
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /tmp
+    networks:
+      - name: kafka-molecule
+    groups:
+      - kafka
+  - name: int-res-test-kafka03
+    image: almalinux/10-init
+    command: /usr/sbin/init
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /tmp
+    networks:
+      - name: kafka-molecule
+    groups:
+      - kafka
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      roles_path: ${MOLECULE_PROJECT_DIRECTORY}/roles
+  inventory:
+    group_vars:
+      all:
+        kafka_env: test
+        # No domain: the FQDN is the container name, which Docker DNS resolves
+        kafka_domain: ""
+        kafka_cluster_id: "hy1V_KThTdCaMjjx9oPq2A"
+        kafka_heap: 512m
+        artifacts_dir: ${MOLECULE_PROJECT_DIRECTORY}/artifacts
+        artifacts_manifest: ${MOLECULE_PROJECT_DIRECTORY}/artifacts.yml
+        kafka_tls_selfsigned: true
+        kafka_tls_source_dir: ${MOLECULE_EPHEMERAL_DIRECTORY}/certs
+        kafka_tls_keystore_password: molecule-ks
+        kafka_tls_truststore_password: molecule-ts
+        kafka_admin_password: MoleculeAdmin123
+        kafka_topics_list:
+          - name: molecule-test
+            partitions: 3
+            replication_factor: 3
+        kafka_users_scram:
+          - name: tester
+            password: MoleculeTester123
+        kafka_users_acls:
+          - principal: "User:tester"
+            resource_type: topic
+            name: molecule-test
+            operations: [Describe, Write, Read]
+          - principal: "User:tester"
+            resource_type: group
+            name: molecule-
+            pattern_type: prefixed
+            operations: [Read]
+    host_vars:
+      int-res-test-kafka01: {kafka_node_id: 1, kafka_directory_id: "E7M2YOf0Sx6RqtsvWwrNVg"}
+      int-res-test-kafka02: {kafka_node_id: 2, kafka_directory_id: "MOlVWwVhSG6QS9AHIwGTxw"}
+      int-res-test-kafka03: {kafka_node_id: 3, kafka_directory_id: "U8hOr4n0STWpIeHS4bLXiQ"}
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - dependency
+    - destroy
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - verify
+    - destroy

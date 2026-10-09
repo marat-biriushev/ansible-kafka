@@ -1,0 +1,17 @@
+---
+- name: Kafka cluster
+  hosts: kafka
+  become: true
+  gather_facts: false
+  roles:
+    - kafka_tls
+    - kafka_jmx_exporter
+    - kafka
+
+- name: Topics, SCRAM accounts and ACLs
+  hosts: kafka[0]
+  become: true
+  gather_facts: false
+  roles:
+    - kafka_topics
+    - kafka_users

@@ -1,0 +1,20 @@
+---
+# What the owner does by hand on real hosts (README "OS preparation"):
+# Java and OpenSSL from the distribution repositories, /data as a directory.
+- name: Prepare the containers like a prepared RHEL 10 host
+  hosts: kafka
+  gather_facts: false
+  tasks:
+    - name: Install Java 21 and OpenSSL (test containers only)
+      ansible.builtin.dnf:
+        name:
+          - java-21-openjdk-headless
+          - openssl
+          - procps-ng
+        state: present
+
+    - name: Create /data
+      ansible.builtin.file:
+        path: /data
+        state: directory
+        mode: "0755"
