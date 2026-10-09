@@ -1,0 +1,13 @@
+---
+node_exporter_version: "1.12.1"
+node_exporter_file: "node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+node_exporter_artifacts_dir: "{{ artifacts_dir | default(playbook_dir ~ '/../artifacts') }}"
+node_exporter_artifacts_manifest: "{{ artifacts_manifest | default(playbook_dir ~ '/../artifacts.yml') }}"
+
+node_exporter_install_root: /opt
+node_exporter_install_dir: "{{ node_exporter_install_root }}/node_exporter-{{ node_exporter_version }}.linux-amd64"
+node_exporter_user: node_exporter
+node_exporter_listen_address: ":9100"
+# Read by the textfile collector; kafka_tls writes the certificate expiry here
+node_exporter_textfile_dir: /var/lib/node_exporter/textfile
+node_exporter_extra_args: []

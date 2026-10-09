@@ -1,0 +1,37 @@
+---
+# Generated from defaults/main.yml; keep the two in sync.
+argument_specs:
+  main:
+    short_description: Prometheus node_exporter from the offline tarball, under systemd
+    options:
+      node_exporter_version:
+        description: node_exporter version; must match artifacts.yml.
+        type: str
+      node_exporter_file:
+        description: Tarball file name in artifacts/.
+        type: str
+      node_exporter_artifacts_dir:
+        description: Directory with the offline artifacts on the control node.
+        type: str
+      node_exporter_artifacts_manifest:
+        description: Path of artifacts.yml on the control node.
+        type: str
+      node_exporter_install_root:
+        description: Where the tarball is unpacked.
+        type: str
+      node_exporter_install_dir:
+        description: Versioned install directory.
+        type: str
+      node_exporter_user:
+        description: Service account.
+        type: str
+      node_exporter_listen_address:
+        description: --web.listen-address.
+        type: str
+      node_exporter_textfile_dir:
+        description: --collector.textfile.directory.
+        type: str
+      node_exporter_extra_args:
+        description: Extra command-line flags.
+        type: list
+        elements: raw
