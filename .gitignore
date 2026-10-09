@@ -1,0 +1,17 @@
+# Offline artifacts: downloaded by scripts/fetch-artifacts.sh, never committed
+/artifacts/*
+!/artifacts/README.md
+
+# Certificates and keys (CA-issued PEMs and the self-signed TEST CA)
+/certs/*
+!/certs/README.md
+
+# Real secrets
+vault.yml
+.vault_pass*
+
+# Collections installed offline from artifacts/collections
+/collections/
+
+*.retry
+.ansible/

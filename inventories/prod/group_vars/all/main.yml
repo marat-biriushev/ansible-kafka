@@ -1,0 +1,72 @@
+---
+kafka_env: prod
+kafka_domain: ipa.ipotekabank.uz
+
+# Generate once with kafka-storage.sh random-uuid (README "Cluster and
+# directory IDs") and never change it. The per-node kafka_directory_id
+# values are in host_vars.
+kafka_cluster_id: ""
+
+kafka_heap: 6g
+
+# Bootstrap name for clients: DNS with one A record per broker. It goes into
+# the certificate SANs; the services below use the broker FQDNs directly.
+kafka_bootstrap_name: int-res-prod-kafka.ipa.ipotekabank.uz
+kafka_bootstrap_servers: "{{ groups['kafka'] | map('regex_replace', '$', '.' ~ kafka_domain ~ ':9092') | list }}"
+
+# --- TLS -------------------------------------------------------------------
+# PEM files on the control node: certs/prod/ca.pem, certs/prod/<host>.crt, .key
+kafka_tls_source_dir: "{{ playbook_dir }}/../certs/prod"
+kafka_tls_selfsigned: false
+kafka_tls_bootstrap_name: "{{ kafka_bootstrap_name }}"
+
+# --- Images (Nexus docker-proxy, see the docker role in ansible-ib) --------
+container_registry: docker-proxy.nexus.otp.ipotekabank.uz
+
+# --- Secrets ---------------------------------------------------------------
+# Values live in vault.yml (ansible-vault), see vault.yml.example. Only these
+# lines refer to vault_*; swap them for community.hashi_vault lookups later
+# without touching the roles.
+kafka_admin_password: "{{ vault_kafka_admin_password }}"
+kafka_tls_keystore_password: "{{ vault_kafka_tls_keystore_password }}"
+kafka_tls_truststore_password: "{{ vault_kafka_tls_truststore_password }}"
+schema_registry_kafka_password: "{{ vault_kafka_scram_passwords['schema-registry'] }}"
+kafka_ui_kafka_password: "{{ vault_kafka_scram_passwords['kafka-ui'] }}"
+kafka_ui_login_password: "{{ vault_kafka_ui_login_password }}"
+kafka_exporter_kafka_password: "{{ vault_kafka_scram_passwords['kafka-exporter'] }}"
+kafka_canary_kafka_password: "{{ vault_kafka_scram_passwords['canary'] }}"
+
+# --- Service accounts, ACLs and topics (playbooks/users-acl.yml) -----------
+kafka_users_scram: >-
+  {{ vault_kafka_scram_passwords | dict2items(key_name='name', value_name='password') }}
+
+kafka_users_acls:
+  # Schema Registry: its storage topic, its group, cluster configs
+  - { principal: "User:schema-registry", resource_type: topic, name: _schemas, operations: [All] }
+  - { principal: "User:schema-registry", resource_type: group, name: schema-registry, operations: [Read, Describe] }
+  - { principal: "User:schema-registry", resource_type: cluster, operations: [DescribeConfigs] }
+  # Kafka UI: read-only
+  - { principal: "User:kafka-ui", resource_type: topic, name: "*", operations: [Describe, Read, DescribeConfigs] }
+  - { principal: "User:kafka-ui", resource_type: group, name: "*", operations: [Describe, Read] }
+  - { principal: "User:kafka-ui", resource_type: cluster, operations: [Describe, DescribeConfigs] }
+  # kafka-exporter: metadata and consumer group offsets
+  - { principal: "User:kafka-exporter", resource_type: topic, name: "*", operations: [Describe] }
+  - { principal: "User:kafka-exporter", resource_type: group, name: "*", operations: [Describe] }
+  - { principal: "User:kafka-exporter", resource_type: cluster, operations: [Describe] }
+  # Canary: its own topic and group
+  - { principal: "User:canary", resource_type: topic, name: __strimzi_canary, operations: [All] }
+  - { principal: "User:canary", resource_type: group, name: canary, operations: [All] }
+  - { principal: "User:canary", resource_type: cluster, operations: [Describe] }
+
+kafka_topics_list:
+  - name: _schemas
+    partitions: 1
+    replication_factor: 3
+    config:
+      cleanup.policy: compact
+      min.insync.replicas: 2
+
+# --- Services VM ---------------------------------------------------------
+kafka_ui_auth_type: LOGIN_FORM
+kafka_ui_schema_registry_url: "http://{{ groups['kafka_services'][0] }}.{{ kafka_domain }}:8081"
+kafka_canary_enabled: true

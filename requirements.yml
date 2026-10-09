@@ -1,0 +1,7 @@
+---
+# Installed offline, see README "Offline artifacts".
+collections:
+  - name: community.crypto
+    version: "3.5.0"
+  - name: community.docker
+    version: "5.4.0"
