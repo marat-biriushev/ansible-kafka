@@ -1,0 +1,33 @@
+---
+# The expiry date of a certificate never changes, so a static textfile
+# metric is enough for the "certificate expires in < 30 / < 7 days" alerts.
+- name: Read the certificate expiry on the control node
+  community.crypto.x509_certificate_info:
+    path: "{{ kafka_tls_source_dir }}/{{ inventory_hostname }}.crt"
+  register: kafka_tls_cert_info
+  delegate_to: localhost
+  become: false
+
+- name: Create the node_exporter textfile directory
+  ansible.builtin.file:
+    path: "{{ kafka_tls_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write the certificate expiry metric
+  ansible.builtin.copy:
+    dest: "{{ kafka_tls_textfile_dir }}/kafka_tls.prom"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # HELP kafka_tls_certificate_not_after_seconds Expiry of the Kafka broker certificate, Unix time.
+      # TYPE kafka_tls_certificate_not_after_seconds gauge
+      kafka_tls_certificate_not_after_seconds{subject="{{ kafka_tls_cert_info.subject.commonName | default('') }}"} {{ _not_after }}
+  vars:
+    # not_after is UTC (YYYYMMDDHHMMSSZ); subtracting the epoch avoids the local timezone
+    _not_after: >-
+      {{ ((kafka_tls_cert_info.not_after | to_datetime('%Y%m%d%H%M%SZ'))
+          - ('19700101000000' | to_datetime('%Y%m%d%H%M%S'))).total_seconds() | int }}

@@ -1,0 +1,45 @@
+---
+# Where the PEM files live on the control node:
+#   <dir>/ca.pem                       CA chain (root last), PEM
+#   <dir>/<inventory_hostname>.crt     node certificate, PEM
+#   <dir>/<inventory_hostname>.key     node private key, PEM, unencrypted
+# With kafka_tls_selfsigned the role generates all of them there itself.
+kafka_tls_source_dir: "{{ playbook_dir }}/../certs"
+
+# TEST only: generate a private CA and node certificates with community.crypto
+# on the control node, so the stand comes up without a request to the bank CA.
+kafka_tls_selfsigned: false
+kafka_tls_selfsigned_ca_cn: "Kafka TEST CA"
+kafka_tls_selfsigned_ca_days: 3650
+kafka_tls_selfsigned_cert_days: 730
+# Environment name, used to refuse self-signed certificates on prod
+kafka_tls_env: "{{ kafka_env | default('') }}"
+
+# Inventory groups: brokers get keystore + truststore, clients get the CA only
+kafka_tls_broker_group: kafka
+kafka_tls_client_group: kafka_services
+
+# Subject alternative names of a broker certificate
+kafka_tls_domain: "{{ kafka_domain | default('') }}"
+kafka_tls_fqdn: "{{ inventory_hostname ~ (('.' ~ kafka_tls_domain) if kafka_tls_domain else '') }}"
+kafka_tls_bootstrap_name: ""
+kafka_tls_san: >-
+  {{ ['DNS:' ~ kafka_tls_fqdn, 'DNS:' ~ inventory_hostname]
+     + (['DNS:' ~ kafka_tls_bootstrap_name] if kafka_tls_bootstrap_name else [])
+     + (['IP:' ~ ansible_host] if ansible_host | default('') is match('^[0-9.]+$') else []) }}
+
+# On the brokers
+kafka_tls_owner: kafka
+kafka_tls_dir: /etc/kafka/tls
+kafka_tls_keystore: "{{ kafka_tls_dir }}/keystore.p12"
+kafka_tls_truststore: "{{ kafka_tls_dir }}/truststore.p12"
+kafka_tls_keystore_password: ""
+kafka_tls_truststore_password: ""
+kafka_tls_keytool: keytool
+
+# On the clients (kafka_services): CA chain only, mounted into the containers
+kafka_tls_client_ca_file: /etc/kafka-services/ca.pem
+
+# Certificate expiry as a node_exporter textfile metric
+# (kafka_tls_certificate_not_after_seconds). Empty disables it.
+kafka_tls_textfile_dir: /var/lib/node_exporter/textfile

@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: ipotekabank DevOps
+  description: PKCS12 keystore/truststore for the brokers from PEM files; CA file for clients; optional self-signed TEST CA
+  license: proprietary
+  min_ansible_version: "2.16"
+  platforms:
+    - name: EL
+      versions:
+        - "10"
+dependencies: []

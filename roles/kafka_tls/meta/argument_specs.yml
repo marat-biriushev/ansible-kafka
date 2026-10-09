@@ -1,0 +1,73 @@
+---
+# Generated from defaults/main.yml; keep the two in sync.
+argument_specs:
+  main:
+    short_description: PKCS12 keystore/truststore for the brokers from PEM files; CA file for clients; optional self-signed
+      TEST CA
+    options:
+      kafka_tls_source_dir:
+        description: Directory on the control node with ca.pem, <host>.crt, <host>.key.
+        type: str
+      kafka_tls_selfsigned:
+        description: TEST only. Generate a CA and node certificates into kafka_tls_source_dir.
+        type: bool
+      kafka_tls_selfsigned_ca_cn:
+        description: CN of the self-signed CA.
+        type: str
+      kafka_tls_selfsigned_ca_days:
+        description: Validity of the self-signed CA.
+        type: int
+      kafka_tls_selfsigned_cert_days:
+        description: Validity of self-signed node certificates.
+        type: int
+      kafka_tls_env:
+        description: Environment name; self-signed mode refuses "prod".
+        type: str
+      kafka_tls_broker_group:
+        description: Group that gets keystore and truststore.
+        type: str
+      kafka_tls_client_group:
+        description: Group that gets only the CA file.
+        type: str
+      kafka_tls_domain:
+        description: DNS domain for the certificate names.
+        type: str
+      kafka_tls_fqdn:
+        description: Certificate CN and first SAN.
+        type: str
+      kafka_tls_bootstrap_name:
+        description: Client bootstrap DNS name, added to the SANs.
+        type: str
+      kafka_tls_san:
+        description: Subject alternative names (FQDN, short name, bootstrap name, IP).
+        type: list
+        elements: raw
+      kafka_tls_owner:
+        description: Owner of the TLS files on the brokers.
+        type: str
+      kafka_tls_dir:
+        description: TLS directory on the brokers.
+        type: str
+      kafka_tls_keystore:
+        description: PKCS12 keystore built by kafka_tls.
+        type: str
+      kafka_tls_truststore:
+        description: PKCS12 truststore built by kafka_tls.
+        type: str
+      kafka_tls_keystore_password:
+        description: Keystore and key password (vault).
+        type: str
+        no_log: true
+      kafka_tls_truststore_password:
+        description: Truststore password (vault).
+        type: str
+        no_log: true
+      kafka_tls_keytool:
+        description: keytool binary (comes with the JDK).
+        type: str
+      kafka_tls_client_ca_file:
+        description: CA file on the services VM, mounted into the containers.
+        type: str
+      kafka_tls_textfile_dir:
+        description: node_exporter textfile directory for the expiry metric; empty disables it.
+        type: str

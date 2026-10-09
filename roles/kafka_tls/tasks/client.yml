@@ -1,0 +1,16 @@
+---
+- name: Create the directory for the client CA file
+  ansible.builtin.file:
+    path: "{{ kafka_tls_client_ca_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Copy the CA chain
+  ansible.builtin.copy:
+    src: "{{ kafka_tls_source_dir }}/ca.pem"
+    dest: "{{ kafka_tls_client_ca_file }}"
+    owner: root
+    group: root
+    mode: "0644"

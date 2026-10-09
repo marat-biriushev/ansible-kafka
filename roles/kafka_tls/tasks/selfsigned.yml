@@ -1,0 +1,91 @@
+---
+# Control node only. Produces the same files a CA-issued setup would have,
+# so the rest of the role does not care where they came from.
+- name: Refuse self-signed certificates outside TEST
+  ansible.builtin.assert:
+    that: kafka_tls_env != 'prod'
+    fail_msg: kafka_tls_selfsigned is for TEST only. PROD uses certificates from the bank CA.
+    quiet: true
+  run_once: true
+
+- name: Create the certificate directory
+  ansible.builtin.file:
+    path: "{{ kafka_tls_source_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Generate the TEST CA key
+  community.crypto.openssl_privatekey:
+    path: "{{ kafka_tls_source_dir }}/ca.key"
+    type: RSA
+    size: 4096
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Build the TEST CA request
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ kafka_tls_source_dir }}/ca.key"
+    common_name: "{{ kafka_tls_selfsigned_ca_cn }}"
+    basic_constraints: ["CA:TRUE", "pathlen:0"]
+    basic_constraints_critical: true
+    key_usage: [keyCertSign, cRLSign]
+    key_usage_critical: true
+  register: kafka_tls_ca_csr
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Self-sign the TEST CA
+  community.crypto.x509_certificate:
+    path: "{{ kafka_tls_source_dir }}/ca.pem"
+    csr_content: "{{ kafka_tls_ca_csr.csr }}"
+    privatekey_path: "{{ kafka_tls_source_dir }}/ca.key"
+    provider: selfsigned
+    selfsigned_not_after: "+{{ kafka_tls_selfsigned_ca_days }}d"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Generate the node key
+  community.crypto.openssl_privatekey:
+    path: "{{ kafka_tls_source_dir }}/{{ inventory_hostname }}.key"
+    type: RSA
+    size: 3072
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  when: inventory_hostname in groups[kafka_tls_broker_group]
+
+- name: Build the node request
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ kafka_tls_source_dir }}/{{ inventory_hostname }}.key"
+    common_name: "{{ kafka_tls_fqdn }}"
+    subject_alt_name: "{{ kafka_tls_san }}"
+    key_usage: [digitalSignature, keyEncipherment]
+    key_usage_critical: true
+    extended_key_usage: [serverAuth, clientAuth]
+  register: kafka_tls_node_csr
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  when: inventory_hostname in groups[kafka_tls_broker_group]
+
+- name: Sign the node certificate with the TEST CA
+  community.crypto.x509_certificate:
+    path: "{{ kafka_tls_source_dir }}/{{ inventory_hostname }}.crt"
+    csr_content: "{{ kafka_tls_node_csr.csr }}"
+    provider: ownca
+    ownca_path: "{{ kafka_tls_source_dir }}/ca.pem"
+    ownca_privatekey_path: "{{ kafka_tls_source_dir }}/ca.key"
+    ownca_not_after: "+{{ kafka_tls_selfsigned_cert_days }}d"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+  when: inventory_hostname in groups[kafka_tls_broker_group]

@@ -1,0 +1,159 @@
+---
+- name: Check the store passwords
+  ansible.builtin.assert:
+    that:
+      - kafka_tls_keystore_password | length >= 6
+      - kafka_tls_truststore_password | length >= 6
+    fail_msg: kafka_tls_keystore_password and kafka_tls_truststore_password must be set in the vault (6+ characters).
+    quiet: true
+  no_log: true
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+
+# The stores are readable by the kafka user only, so the account has to
+# exist before Kafka itself is installed. Created only when missing: the
+# kafka role owns its settings.
+- name: Look up the kafka user
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ kafka_tls_owner }}"
+    fail_key: false
+
+- name: Create the kafka user if it does not exist yet
+  ansible.builtin.user:
+    name: "{{ kafka_tls_owner }}"
+    system: true
+    shell: /sbin/nologin
+    home: /opt/kafka
+    create_home: false
+  when: ansible_facts.getent_passwd[kafka_tls_owner] is none
+
+- name: Create the TLS directory
+  ansible.builtin.file:
+    path: "{{ kafka_tls_dir }}"
+    state: directory
+    owner: "{{ kafka_tls_owner }}"
+    group: "{{ kafka_tls_owner }}"
+    mode: "0750"
+
+- name: Copy the CA chain, the certificate and the key
+  ansible.builtin.copy:
+    src: "{{ kafka_tls_source_dir }}/{{ item.src }}"
+    dest: "{{ kafka_tls_dir }}/{{ item.dest }}"
+    owner: "{{ kafka_tls_owner }}"
+    group: "{{ kafka_tls_owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: ca.pem, dest: ca.pem, mode: "0644" }
+    - { src: "{{ inventory_hostname }}.crt", dest: node.crt, mode: "0644" }
+    - { src: "{{ inventory_hostname }}.key", dest: node.key, mode: "0600" }
+  loop_control:
+    label: "{{ item.dest }}"
+  register: kafka_tls_pem
+  no_log: true
+
+# A store is rebuilt when a PEM changed, when it is missing, or when it no
+# longer opens with the password from the vault (password rotation).
+- name: Check that the stores open with the current passwords
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_tls_keytool }}"
+      - -list
+      - -storetype
+      - PKCS12
+      - -keystore
+      - "{{ item.path }}"
+      - -storepass:env
+      - KAFKA_TLS_STORE_PASS
+  environment:
+    KAFKA_TLS_STORE_PASS: "{{ item.password }}"
+  loop:
+    - { path: "{{ kafka_tls_keystore }}", password: "{{ kafka_tls_keystore_password }}" }
+    - { path: "{{ kafka_tls_truststore }}", password: "{{ kafka_tls_truststore_password }}" }
+  register: kafka_tls_store_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Decide which stores to rebuild
+  ansible.builtin.set_fact:
+    kafka_tls_rebuild_keystore: "{{ kafka_tls_pem is changed or kafka_tls_store_check.results[0].rc != 0 }}"
+    kafka_tls_rebuild_truststore: "{{ kafka_tls_pem is changed or kafka_tls_store_check.results[1].rc != 0 }}"
+
+- name: Build the PKCS12 keystore
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - pkcs12
+      - -export
+      - -in
+      - "{{ kafka_tls_dir }}/node.crt"
+      - -inkey
+      - "{{ kafka_tls_dir }}/node.key"
+      - -certfile
+      - "{{ kafka_tls_dir }}/ca.pem"
+      - -name
+      - "{{ kafka_tls_fqdn }}"
+      - -out
+      - "{{ kafka_tls_keystore }}"
+      - -passout
+      - env:KAFKA_TLS_STORE_PASS
+  environment:
+    KAFKA_TLS_STORE_PASS: "{{ kafka_tls_keystore_password }}"
+  when: kafka_tls_rebuild_keystore
+  changed_when: true
+  notify: Kafka restart required
+  no_log: true
+
+- name: Remove the old truststore before rebuilding it
+  ansible.builtin.file:
+    path: "{{ kafka_tls_truststore }}"
+    state: absent
+  when: kafka_tls_rebuild_truststore
+
+# keytool imports one certificate per call, so every certificate of the
+# chain goes in under its own alias. The PEM is read on the control node.
+- name: Build the PKCS12 truststore
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_tls_keytool }}"
+      - -importcert
+      - -noprompt
+      - -alias
+      - "ca{{ ca_index }}"
+      - -storetype
+      - PKCS12
+      - -keystore
+      - "{{ kafka_tls_truststore }}"
+      - -storepass:env
+      - KAFKA_TLS_STORE_PASS
+    stdin: "{{ item }}"
+  environment:
+    KAFKA_TLS_STORE_PASS: "{{ kafka_tls_truststore_password }}"
+  loop: >-
+    {{ lookup('ansible.builtin.file', kafka_tls_source_dir ~ '/ca.pem')
+       | regex_findall('-----BEGIN CERTIFICATE-----[^-]+-----END CERTIFICATE-----') }}
+  loop_control:
+    index_var: ca_index
+    label: "ca{{ ca_index }}"
+  when: kafka_tls_rebuild_truststore
+  changed_when: true
+  notify: Kafka restart required
+  no_log: true
+
+- name: Set the store permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: "{{ kafka_tls_owner }}"
+    group: "{{ kafka_tls_owner }}"
+    mode: "0600"
+  loop:
+    - "{{ kafka_tls_keystore }}"
+    - "{{ kafka_tls_truststore }}"
+  when: not ansible_check_mode
+
+- name: Export the certificate expiry for node_exporter
+  ansible.builtin.include_tasks: expiry.yml
+  when: kafka_tls_textfile_dir | length > 0

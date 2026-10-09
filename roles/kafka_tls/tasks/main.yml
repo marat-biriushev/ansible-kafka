@@ -1,0 +1,31 @@
+---
+- name: Generate the self-signed TEST certificates
+  ansible.builtin.include_tasks: selfsigned.yml
+  when: kafka_tls_selfsigned
+
+- name: Check that the PEM files are on the control node
+  ansible.builtin.stat:
+    path: "{{ kafka_tls_source_dir }}/{{ item }}"
+  loop: "{{ ['ca.pem'] + ([inventory_hostname ~ '.crt', inventory_hostname ~ '.key'] if _is_broker else []) }}"
+  register: kafka_tls_sources
+  delegate_to: localhost
+  become: false
+  vars:
+    _is_broker: "{{ inventory_hostname in groups[kafka_tls_broker_group] }}"
+
+- name: Fail if a PEM file is missing
+  ansible.builtin.assert:
+    that: _missing | length == 0
+    fail_msg: >-
+      Put {{ _missing | join(', ') }} in {{ kafka_tls_source_dir }}/, see README "Certificates".
+    quiet: true
+  vars:
+    _missing: "{{ kafka_tls_sources.results | rejectattr('stat.exists') | map(attribute='item') | list }}"
+
+- name: Set up the broker keystore and truststore
+  ansible.builtin.include_tasks: broker.yml
+  when: inventory_hostname in groups[kafka_tls_broker_group]
+
+- name: Set up the client CA file
+  ansible.builtin.include_tasks: client.yml
+  when: inventory_hostname in groups[kafka_tls_client_group] | default([])
