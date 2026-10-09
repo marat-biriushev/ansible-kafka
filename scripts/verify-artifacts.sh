@@ -16,6 +16,8 @@ data = yaml.safe_load(open(sys.argv[1]))
 for a in data["artifacts"]:
     algo = "sha512" if "sha512" in a else "sha256"
     print("\t".join(["file", a["file"], algo, a[algo].lower()]))
+for a in data.get("connect_plugins") or []:
+    print("\t".join(["file", "connect-plugins/" + a["file"], "sha256", a["sha256"].lower()]))
 for c in yaml.safe_load(open(sys.argv[2]))["collections"]:
     ns, name = c["name"].split(".")
     print("\t".join(["collection", f"collections/{ns}-{name}-{c['version']}.tar.gz", "", ""]))

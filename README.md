@@ -8,14 +8,16 @@ come from `artifacts/`, container images from the internal Nexus mirror.
 Scope of this repository:
 
 * **In:** Kafka itself, TLS stores, SCRAM service accounts and their ACLs,
-  service topics, JMX exporter, node_exporter, Schema Registry / Kafka UI /
-  kafka-exporter / canary in Docker, rolling restart, monitoring rules.
+  service topics, JMX exporter, node_exporter, Schema Registry / Kafka
+  Connect / Kafka UI / kafka-exporter / canary in Docker, rolling restart,
+  monitoring rules.
 * **Out, done by hand:** everything at OS level (data disk, time sync,
   sysctl, firewall, SELinux, Java and other packages), see
   [OS preparation](#os-preparation). Docker on the services VM is
   installed with the `docker` role from ansible-ib.
 * **Out, other repositories / phase 2:** application topics and ACLs (CI/CD
-  repo), MirrorMaker 2, DR, Kafka Connect, Cruise Control, vmagent itself.
+  repo), connector definitions (created through the Connect REST API or
+  Kafka UI), MirrorMaker 2, DR, Cruise Control, vmagent itself.
 
 Every command below is run by the owner on the control node or the hosts,
 each with what to check after it.
@@ -30,6 +32,7 @@ each with what to check after it.
 - [Certificates](#certificates)
 - [Secrets](#secrets)
 - [Deployment from scratch](#deployment-from-scratch)
+- [Kafka Connect and database connectors](#kafka-connect-and-database-connectors)
 - [Playbooks](#playbooks)
 - [Rolling restart](#rolling-restart)
 - [Manual tests on TEST](#manual-tests-on-test)
@@ -70,6 +73,7 @@ roles/
   kafka_topics               service topics
   kafka_users                SCRAM accounts and ACLs
   schema_registry            Docker compose
+  kafka_connect              Docker compose, plugins from artifacts/connect-plugins/
   kafka_ui                   Docker compose
   kafka_exporter             Docker compose
   kafka_canary               Docker compose
@@ -167,6 +171,8 @@ firewalld stays on. Open:
 | 9091/tcp, 9093/tcp | the other two kafka nodes only | kafka01-03 |
 | 7071/tcp, 9100/tcp | monitoring (vmagent) | all hosts |
 | 8081/tcp (Schema Registry), 8080/tcp (Kafka UI) | clients / users | kafkasvc01 |
+| 8083/tcp (Kafka Connect REST, no authentication) | operators only; Kafka UI runs on the same host | kafkasvc01 |
+| 7071/tcp, 7072/tcp (Schema Registry, Connect JMX exporter) | monitoring | kafkasvc01 |
 | 9308/tcp (kafka-exporter), 8082/tcp (canary) | monitoring | kafkasvc01 |
 
 Example on a broker (TEST addresses; replace the networks):
@@ -375,17 +381,44 @@ From the repository root (so `ansible.cfg` is used), TEST as example.
    curl -s localhost:7071/metrics | grep activecontrollercount
    ```
 
-   On kafkasvc01: `docker ps` shows four healthy containers;
-   `curl -s localhost:8081/subjects` returns `[]`; Kafka UI opens on
-   `http://int-res-test-kafkasvc01.ipa.ipotekabank.uz:8080`.
+   On kafkasvc01: `docker ps` shows five healthy containers;
+   `curl -s localhost:8081/subjects` returns `[]`;
+   `curl -s localhost:8083/` returns the Connect version and the cluster ID;
+   Kafka UI opens on `http://int-res-test-kafkasvc01.ipa.ipotekabank.uz:8080`
+   and shows the cluster, Schema Registry and Kafka Connect.
 
 3. Run `site.yml` again: it must end with `changed=0` everywhere.
 
 Order inside `site.yml`: `kafka.yml` (kafka_tls, kafka_jmx_exporter,
 kafka, node_exporter on the brokers, then a rolling restart of nodes whose
 config changed) -> `users-acl.yml` (kafka_topics, kafka_users on kafka01)
--> `services.yml` (kafka_tls for the CA, node_exporter and the four
-services on kafkasvc01).
+-> `services.yml` (kafka_tls for the CA, node_exporter, Schema Registry,
+Kafka Connect, Kafka UI, kafka-exporter and the canary on kafkasvc01).
+
+## Kafka Connect and database connectors
+
+Kafka Connect runs as one distributed worker on kafkasvc01
+(`roles/kafka_connect/README.md`). Apache Kafka ships no database
+connectors; to add one (for example Debezium for CDC, or a JDBC connector):
+
+1. Add it to `connect_plugins` in `artifacts.yml` (name, version, file,
+   url, sha256), rerun `scripts/fetch-artifacts.sh` on the machine with
+   internet and bring the bundle over as usual.
+2. Add `{name: <plugin name>}` to `kafka_connect_plugins` in
+   `inventories/<env>/group_vars/all/main.yml`.
+3. Put the database password (and the integration's Kafka password, if the
+   connector uses its own account) into `vault_kafka_connect_connector_secrets`.
+4. `ansible-playbook -i inventories/<env>/hosts.yml playbooks/services.yml --ask-vault-pass`.
+   Check: `curl -s localhost:8083/connector-plugins` on kafkasvc01 lists
+   the connector class.
+5. Create the connector through Kafka UI or `PUT /connectors/<name>/config`,
+   with secrets as `${file:/etc/kafka-connect/secrets/connectors.properties:<key>}`.
+   Check: `GET /connectors/<name>/status` is RUNNING for the connector
+   and every task.
+
+The source database side (a replication slot and publication for
+Debezium on PostgreSQL, LogMiner / supplemental logging on Oracle, a
+read-only user...) is set up by the DBAs.
 
 ## Playbooks
 
@@ -471,13 +504,14 @@ reports all records sent and the output has no `ERROR` lines (retriable
 
 * `monitoring/vmagent-scrape.yml`: jobs `kafka-jmx` (7071 on brokers),
   `node` (9100, all hosts), `kafka-exporter` (9308), `schema-registry`
-  (7071 on kafkasvc01, JMX exporter in the container), `kafka-canary`
-  (8082). Targets are TEST; copy for PROD.
+  (7071 on kafkasvc01, JMX exporter in the container), `kafka-connect`
+  (7072), `kafka-canary` (8082). Targets are TEST; copy for PROD.
 * `monitoring/kafka-alerts.yml`: offline partitions, active controller
   count != 1, under-min-ISR, under-replicated > 5 min, fenced brokers,
   exporter / node down, `/data` > 75% / > 85%, growing consumer lag,
   request handler idle < 20%, certificate expiry < 30 / < 7 days
-  (textfile metric from `kafka_tls`), Schema Registry down, canary errors.
+  (textfile metric from `kafka_tls`), Schema Registry down, Kafka Connect
+  down / failed connector or task / record errors, canary errors.
   The Kafka metric names were checked against a running 4.3.1 broker
   with the rules from `kafka_jmx_exporter`.
 * Kafka authorizer decisions go to `/var/log/kafka/kafka-authorizer.log`
@@ -536,7 +570,8 @@ Choices not fixed by the task, taken from its defaults or made here:
 | Broker principal | certificate CN via `ssl.principal.mapping.rules` |
 | Truststore for services | PEM CA file (`ssl.truststore.type=PEM`), no stores on kafkasvc01 |
 | Schema Registry metrics | JMX exporter javaagent in the container on 7071 |
-| Kafka UI ACLs | Describe/Read on topics and groups as required, plus DescribeConfigs on topics and Describe/DescribeConfigs on the cluster so the UI can show configs (still read-only) |
+| Kafka UI | full rights (owner's decision): not read-only, All ACLs on topics, groups, transactional IDs and the cluster; Schema Registry and Kafka Connect pages enabled |
+| Kafka Connect | `apache/kafka:4.3.1` image (`connect-distributed.sh`), one worker, JSON converters, env and file config providers for secrets, client overrides allowed so each integration can use its own account |
 | Canary ACLs | plus Describe on the cluster (the canary describes it to size its topic) |
 | ACL changes | added, never removed automatically |
 | Topics | service topics created if missing, never altered |
@@ -551,6 +586,12 @@ Choices not fixed by the task, taken from its defaults or made here:
   strings, JAAS strings, env files).
 * Removing an ACL or SCRAM account from the inventory does not remove it
   from the cluster.
+* Kafka UI with `LOGIN_FORM` is one shared password with full admin rights
+  on the cluster. Use OAUTH2/LDAP (and Kafka UI RBAC) on PROD.
+* Kafka Connect: one worker, so a restart of kafkasvc01 stops all
+  connectors until it is back. Its REST API (8083) has no
+  authentication. Plugins removed from `kafka_connect_plugins` are not
+  deleted from the host.
 * Docker does not restart a container that only turns unhealthy;
   `restart: unless-stopped` covers crashes.
 * The strimzi canary project is archived upstream and its image is only on
@@ -561,5 +602,7 @@ Choices not fixed by the task, taken from its defaults or made here:
 * Molecule needs Docker with systemd containers and internet; it has not
   been run in the authoring environment. The Kafka roles, the rolling
   restart and the metric names were tested there against a local 3-node
-  Kafka 4.3.1 cluster instead; the Docker services were checked with
-  `docker compose config` only.
+  Kafka 4.3.1 cluster instead, and so was the Kafka Connect worker config
+  (SASL password from `${env:}`, a connector with `${file:}` secrets and its
+  own account through `consumer.override.*`, the JMX metric names). The
+  containers themselves were checked with `docker compose config` only.

@@ -39,6 +39,8 @@ data = yaml.safe_load(open(sys.argv[1]))
 for a in data["artifacts"]:
     algo = "sha512" if "sha512" in a else "sha256"
     print("\t".join([a["name"], a["file"], a["url"], algo, a[algo].lower()]))
+for a in data.get("connect_plugins") or []:
+    print("\t".join([a["name"], "connect-plugins/" + a["file"], a["url"], "sha256", a["sha256"].lower()]))
 PY
 )"
 
@@ -53,6 +55,7 @@ while IFS=$'\t' read -r name file url algo sum; do
     continue
   fi
   echo "fetching  ${file}"
+  mkdir -p "$(dirname "${target}")"
   curl -fL --retry 3 -o "${target}.part" "${url}"
   if ! verify "${target}.part" "${algo}" "${sum}"; then
     echo "CHECKSUM MISMATCH for ${name} (${file}), expected ${algo} ${sum}" >&2

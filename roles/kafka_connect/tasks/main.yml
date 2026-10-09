@@ -1,0 +1,143 @@
+---
+- name: Check the Kafka Connect settings
+  ansible.builtin.assert:
+    that:
+      - kafka_connect_bootstrap_servers | length > 0
+      - kafka_connect_kafka_password | length >= 12
+      - kafka_connect_kafka_password is not search('[\s"$#\\]')
+      - kafka_connect_client_override_policy in ['All', 'None', 'Principal']
+    fail_msg: >-
+      kafka_connect_bootstrap_servers must be set and kafka_connect_kafka_password must come from
+      the vault (12+ characters, no spaces, quotes, $, # or backslashes).
+    quiet: true
+  no_log: true
+
+- name: Read the connector plugins from the artifacts manifest
+  ansible.builtin.set_fact:
+    kafka_connect_plugin_entries: >-
+      {{ (lookup('ansible.builtin.file', kafka_connect_artifacts_manifest) | from_yaml).connect_plugins | default([], true)
+         | selectattr('name', 'in', kafka_connect_plugins | map(attribute='name') | list) | list }}
+
+- name: Check that every plugin is pinned in artifacts.yml
+  ansible.builtin.assert:
+    that: kafka_connect_plugin_entries | length == kafka_connect_plugins | length
+    fail_msg: >-
+      Every entry of kafka_connect_plugins needs a connect_plugins entry (name, file, sha256) in artifacts.yml;
+      missing: {{ kafka_connect_plugins | map(attribute='name') | difference(kafka_connect_plugin_entries | map(attribute='name')) | join(', ') }}
+    quiet: true
+
+- name: Look for the plugins and the javaagent jar in artifacts/
+  ansible.builtin.stat:
+    path: "{{ kafka_connect_artifacts_dir }}/{{ item }}"
+    checksum_algorithm: sha256
+  loop: >-
+    {{ (kafka_connect_plugin_entries | map(attribute='file') | map('regex_replace', '^', 'connect-plugins/') | list)
+       + ([kafka_connect_jmx_exporter_file] if kafka_connect_jmx_exporter_enabled else []) }}
+  register: kafka_connect_artifact_stat
+  delegate_to: localhost
+  become: false
+
+- name: Fail if an artifact is missing or corrupt
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.item is not match('connect-plugins/') or item.stat.checksum == _pinned[item.item | basename] | default('')
+    fail_msg: >-
+      {{ 'Put ' ~ item.item ~ ' in artifacts/' if not item.stat.exists else item.item ~ ' does not match the sha256 in artifacts.yml' }},
+      see README "Offline artifacts".
+    quiet: true
+  loop: "{{ kafka_connect_artifact_stat.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  vars:
+    _pinned: "{{ dict(kafka_connect_plugin_entries | map(attribute='file') | zip(kafka_connect_plugin_entries | map(attribute='sha256') | map('lower'))) }}"
+
+- name: Create the project directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ kafka_connect_project_dir }}", mode: "0755" }
+    # Read by the container user through read-only bind mounts
+    - { path: "{{ kafka_connect_project_dir }}/plugins", mode: "0755" }
+    - { path: "{{ kafka_connect_project_dir }}/jmx", mode: "0755" }
+    - { path: "{{ kafka_connect_project_dir }}/secrets", mode: "0700", owner: "{{ kafka_connect_container_uid }}" }
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Install the connector plugins
+  ansible.builtin.include_tasks: plugin.yml
+  loop: "{{ kafka_connect_plugin_entries }}"
+  loop_control:
+    loop_var: kafka_connect_plugin
+    label: "{{ kafka_connect_plugin.name }}"
+
+- name: Copy the javaagent jar
+  ansible.builtin.copy:
+    src: "{{ kafka_connect_artifacts_dir }}/{{ kafka_connect_jmx_exporter_file }}"
+    dest: "{{ kafka_connect_project_dir }}/jmx/jmx_prometheus_javaagent.jar"
+    owner: root
+    group: root
+    mode: "0644"
+  when: kafka_connect_jmx_exporter_enabled
+  notify: Restart kafka-connect
+
+- name: Deploy the exporter rules
+  ansible.builtin.template:
+    src: jmx-exporter.yml.j2
+    dest: "{{ kafka_connect_project_dir }}/jmx/jmx-exporter.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  when: kafka_connect_jmx_exporter_enabled
+  notify: Restart kafka-connect
+
+- name: Deploy the worker config
+  ansible.builtin.template:
+    src: connect-distributed.properties.j2
+    dest: "{{ kafka_connect_project_dir }}/connect-distributed.properties"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart kafka-connect
+
+- name: Deploy the connector secrets
+  ansible.builtin.template:
+    src: connectors.properties.j2
+    dest: "{{ kafka_connect_project_dir }}/secrets/connectors.properties"
+    owner: "{{ kafka_connect_container_uid }}"
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart kafka-connect
+
+- name: Deploy the worker secrets
+  ansible.builtin.template:
+    src: secrets.env.j2
+    dest: "{{ kafka_connect_project_dir }}/secrets.env"
+    owner: root
+    group: root
+    mode: "0600"
+  register: kafka_connect_secrets
+  no_log: true
+
+- name: Deploy compose.yml
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ kafka_connect_project_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start Kafka Connect
+  community.docker.docker_compose_v2:
+    project_src: "{{ kafka_connect_project_dir }}"
+    state: present
+    pull: missing
+    # Compose does not always notice a changed env_file
+    recreate: "{{ 'always' if kafka_connect_secrets is changed else 'auto' }}"
+    wait: true
+    wait_timeout: 300

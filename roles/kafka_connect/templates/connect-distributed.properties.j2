@@ -1,0 +1,38 @@
+# {{ ansible_managed }}
+# No secrets in this file: the SASL password comes from the environment
+# (secrets.env) through the env config provider.
+bootstrap.servers={{ kafka_connect_bootstrap_servers | join(',') }}
+group.id={{ kafka_connect_group_id }}
+
+config.storage.topic={{ kafka_connect_config_topic }}
+offset.storage.topic={{ kafka_connect_offset_topic }}
+status.storage.topic={{ kafka_connect_status_topic }}
+config.storage.replication.factor=3
+offset.storage.replication.factor=3
+status.storage.replication.factor=3
+
+key.converter=org.apache.kafka.connect.json.JsonConverter
+value.converter=org.apache.kafka.connect.json.JsonConverter
+
+listeners=http://0.0.0.0:8083
+rest.advertised.host.name={{ kafka_connect_advertised_host }}
+rest.advertised.port={{ kafka_connect_port }}
+plugin.path=/opt/connect-plugins
+
+config.providers=env,file
+config.providers.env.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider
+config.providers.file.class=org.apache.kafka.common.config.provider.FileConfigProvider
+connector.client.config.override.policy={{ kafka_connect_client_override_policy }}
+
+{% for prefix in ['', 'producer.', 'consumer.', 'admin.'] %}
+# Kafka client security{{ (' for ' ~ prefix[:-1] ~ 's of the connectors') if prefix else ' of the worker' }}
+{{ prefix }}security.protocol=SASL_SSL
+{{ prefix }}sasl.mechanism=SCRAM-SHA-512
+{{ prefix }}sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="{{ kafka_connect_kafka_user }}" password="${env:KAFKA_CONNECT_SASL_PASSWORD}";
+{{ prefix }}ssl.truststore.type=PEM
+{{ prefix }}ssl.truststore.location=/etc/kafka-ca/ca.pem
+
+{% endfor %}
+{% for key, value in kafka_connect_properties_extra | dictsort %}
+{{ key }}={{ value }}
+{% endfor %}

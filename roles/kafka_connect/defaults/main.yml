@@ -1,0 +1,51 @@
+---
+# Kafka Connect in distributed mode, one worker on the services VM. More
+# workers with the same group id can join later on other hosts.
+# apache/kafka is the same Apache Kafka build as the brokers and ships
+# connect-distributed.sh; connector plugins come from artifacts/.
+kafka_connect_image: "{{ container_registry | default('docker.io') }}/apache/kafka:4.3.1"
+kafka_connect_project_dir: /opt/kafka-connect
+kafka_connect_port: 8083
+kafka_connect_advertised_host: "{{ inventory_hostname ~ (('.' ~ kafka_domain) if kafka_domain | default('') else '') }}"
+# User id of appuser in the image; owns the secrets file it must read
+kafka_connect_container_uid: 1000
+
+# Kafka connection: CLIENT listener, SCRAM-SHA-512 over TLS
+kafka_connect_bootstrap_servers: "{{ kafka_bootstrap_servers }}"
+kafka_connect_kafka_user: kafka-connect
+kafka_connect_kafka_password: ""
+kafka_connect_ca_file: /etc/kafka-services/ca.pem
+
+# Worker group and internal topics (created by kafka_topics, see group_vars)
+kafka_connect_group_id: connect-cluster
+kafka_connect_config_topic: connect-configs
+kafka_connect_offset_topic: connect-offsets
+kafka_connect_status_topic: connect-status
+
+# Connectors may set their own producer.override.* / consumer.override.*
+# (for example their own SCRAM account); "None" forbids it.
+kafka_connect_client_override_policy: All
+
+kafka_connect_heap: 1g
+
+# Connector plugins from artifacts/connect-plugins/, each pinned in the
+# connect_plugins list of artifacts.yml. tar.gz or zip (zip needs unzip on
+# the host). Example: [{name: debezium-connector-postgres}]
+kafka_connect_plugins: []
+kafka_connect_artifacts_dir: "{{ artifacts_dir | default(playbook_dir ~ '/../artifacts') }}"
+kafka_connect_artifacts_manifest: "{{ artifacts_manifest | default(playbook_dir ~ '/../artifacts.yml') }}"
+
+# Secrets for connector configs (database passwords...), key: value, from
+# the vault. Connectors reference them as
+# ${file:/etc/kafka-connect/secrets/connectors.properties:<key>}, so they
+# never land in the connect-configs topic in clear text.
+kafka_connect_connector_secrets: {}
+
+# JMX exporter javaagent inside the container, for the kafka-connect job
+kafka_connect_jmx_exporter_enabled: true
+kafka_connect_jmx_exporter_port: 7072
+kafka_connect_jmx_exporter_file: jmx_prometheus_javaagent-1.7.0.jar
+
+# Extra worker properties, key: value
+kafka_connect_properties_extra: {}
+kafka_connect_healthcheck: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8083/"]

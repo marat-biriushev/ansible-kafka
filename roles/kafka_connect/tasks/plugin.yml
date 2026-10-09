@@ -1,0 +1,44 @@
+---
+# One plugin per directory under plugins/. The directory is rebuilt from
+# scratch when the pinned archive changes, so an upgrade never leaves jars
+# of two versions side by side.
+- name: Read the unpacked version of {{ kafka_connect_plugin.name }}
+  ansible.builtin.slurp:
+    src: "{{ kafka_connect_project_dir }}/plugins/{{ kafka_connect_plugin.name }}/.unpacked"
+  register: kafka_connect_plugin_marker
+  failed_when: false
+
+- name: Install {{ kafka_connect_plugin.name }}
+  when: >-
+    (kafka_connect_plugin_marker.content | default('') | b64decode | trim)
+    != kafka_connect_plugin.sha256 | lower
+  block:
+    - name: Remove the previous version of {{ kafka_connect_plugin.name }}
+      ansible.builtin.file:
+        path: "{{ kafka_connect_project_dir }}/plugins/{{ kafka_connect_plugin.name }}"
+        state: absent
+
+    - name: Create the plugin directory for {{ kafka_connect_plugin.name }}
+      ansible.builtin.file:
+        path: "{{ kafka_connect_project_dir }}/plugins/{{ kafka_connect_plugin.name }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Unpack {{ kafka_connect_plugin.file }}
+      ansible.builtin.unarchive:
+        src: "{{ kafka_connect_artifacts_dir }}/connect-plugins/{{ kafka_connect_plugin.file }}"
+        dest: "{{ kafka_connect_project_dir }}/plugins/{{ kafka_connect_plugin.name }}"
+        remote_src: false
+        owner: root
+        group: root
+      notify: Restart kafka-connect
+
+    - name: Record the unpacked version of {{ kafka_connect_plugin.name }}
+      ansible.builtin.copy:
+        dest: "{{ kafka_connect_project_dir }}/plugins/{{ kafka_connect_plugin.name }}/.unpacked"
+        content: "{{ kafka_connect_plugin.sha256 | lower }}\n"
+        owner: root
+        group: root
+        mode: "0644"

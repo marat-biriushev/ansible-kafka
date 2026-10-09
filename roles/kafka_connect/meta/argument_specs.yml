@@ -1,0 +1,82 @@
+---
+# Generated from defaults/main.yml; keep the two in sync.
+argument_specs:
+  main:
+    short_description: Kafka Connect (distributed) in Docker (compose), plugins from artifacts/
+    options:
+      kafka_connect_image:
+        description: Image reference (Nexus mirror); apache/kafka of the broker version.
+        type: str
+      kafka_connect_project_dir:
+        description: Compose project directory.
+        type: str
+      kafka_connect_port:
+        description: Published REST port.
+        type: int
+      kafka_connect_advertised_host:
+        description: rest.advertised.host.name, the host FQDN.
+        type: str
+      kafka_connect_container_uid:
+        description: User id of appuser in the image; owns the connector secrets file.
+        type: int
+      kafka_connect_bootstrap_servers:
+        description: Broker host:port list (CLIENT listener).
+        type: list
+        elements: raw
+      kafka_connect_kafka_user:
+        description: SCRAM account of the worker.
+        type: str
+      kafka_connect_kafka_password:
+        description: Its password (vault).
+        type: str
+        no_log: true
+      kafka_connect_ca_file:
+        description: CA file on the host, mounted read-only.
+        type: str
+      kafka_connect_group_id:
+        description: Worker group id.
+        type: str
+      kafka_connect_config_topic:
+        description: Internal topic for connector configs.
+        type: str
+      kafka_connect_offset_topic:
+        description: Internal topic for source offsets.
+        type: str
+      kafka_connect_status_topic:
+        description: Internal topic for statuses.
+        type: str
+      kafka_connect_client_override_policy:
+        description: connector.client.config.override.policy (All, Principal, None).
+        type: str
+      kafka_connect_heap:
+        description: JVM heap.
+        type: str
+      kafka_connect_plugins:
+        description: Plugins to install, [{name}], each pinned in connect_plugins of artifacts.yml.
+        type: list
+        elements: dict
+      kafka_connect_artifacts_dir:
+        description: Directory with the offline artifacts on the control node.
+        type: str
+      kafka_connect_artifacts_manifest:
+        description: Path of artifacts.yml on the control node.
+        type: str
+      kafka_connect_connector_secrets:
+        description: Secrets for connector configs, key -> value (vault); read through the file config provider.
+        type: dict
+      kafka_connect_jmx_exporter_enabled:
+        description: Run the JMX exporter javaagent in the container.
+        type: bool
+      kafka_connect_jmx_exporter_port:
+        description: Published JMX exporter port.
+        type: int
+      kafka_connect_jmx_exporter_file:
+        description: Jar file name in artifacts/.
+        type: str
+      kafka_connect_properties_extra:
+        description: Extra worker properties, key -> value.
+        type: dict
+      kafka_connect_healthcheck:
+        description: Docker healthcheck test.
+        type: list
+        elements: raw

@@ -116,6 +116,35 @@ groups:
         annotations:
           summary: "{{ $labels.instance }}: Schema Registry unavailable"
 
+      - alert: KafkaConnectDown
+        expr: up{job="kafka-connect"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.instance }}: Kafka Connect worker unavailable"
+
+      # Names checked against Kafka Connect 4.3.1 with the kafka_connect rules
+      - alert: KafkaConnectTaskFailed
+        expr: kafka_connect_worker_connector_connector_failed_task_count > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "connector {{ $labels.connector }}: {{ $value }} failed tasks"
+          description: "See GET /connectors/{{ $labels.connector }}/status for the trace; restart with POST .../restart?includeTasks=true."
+
+      - alert: KafkaConnectConnectorFailed
+        expr: kafka_connect_connector_status{status="failed"} == 1
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "connector {{ $labels.connector }} is FAILED"
+
+      - alert: KafkaConnectRecordErrors
+        expr: increase(kafka_connect_task_error_total_record_errors[10m]) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "connector {{ $labels.connector }} task {{ $labels.task }}: record errors in the last 10 minutes"
+
       - alert: KafkaExporterDown
         expr: up{job="kafka-exporter"} == 0
         for: 5m

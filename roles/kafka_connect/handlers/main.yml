@@ -1,0 +1,7 @@
+---
+# Plugins, the worker config and the secrets file are bind mounts: compose
+# does not see their content change, so restart the container.
+- name: Restart kafka-connect
+  community.docker.docker_compose_v2:
+    project_src: "{{ kafka_connect_project_dir }}"
+    state: restarted

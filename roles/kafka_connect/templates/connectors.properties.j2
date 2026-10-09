@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# Referenced from connector configs as
+# ${file:/etc/kafka-connect/secrets/connectors.properties:<key>}
+{% for key, value in kafka_connect_connector_secrets | dictsort %}
+{{ key }}={{ value }}
+{% endfor %}

@@ -1,0 +1,46 @@
+# {{ ansible_managed }}
+# Kafka Connect worker, connector and task metrics, plus JVM.
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+includeObjectNames:
+  - "kafka.connect:*"
+  - "java.lang:*"
+rules:
+  - pattern: "kafka.connect<type=connect-worker-metrics><>([a-z-]+)"
+    name: kafka_connect_worker_$1
+    type: GAUGE
+  - pattern: "kafka.connect<type=connect-worker-metrics, connector=(.+)><>([a-z-]+)"
+    name: kafka_connect_worker_connector_$2
+    type: GAUGE
+    labels:
+      connector: "$1"
+  - pattern: "kafka.connect<type=connector-task-metrics, connector=(.+), task=(.+)><>status: ([a-z-]+)"
+    name: kafka_connect_task_status
+    type: GAUGE
+    value: 1
+    labels:
+      connector: "$1"
+      task: "$2"
+      status: "$3"
+  - pattern: "kafka.connect<type=connector-metrics, connector=(.+)><>status: ([a-z-]+)"
+    name: kafka_connect_connector_status
+    type: GAUGE
+    value: 1
+    labels:
+      connector: "$1"
+      status: "$2"
+  - pattern: "kafka.connect<type=(source|sink)-task-metrics, connector=(.+), task=(.+)><>([a-z-]+)"
+    name: kafka_connect_$1_task_$4
+    type: GAUGE
+    labels:
+      connector: "$2"
+      task: "$3"
+  - pattern: "kafka.connect<type=task-error-metrics, connector=(.+), task=(.+)><>([a-z-]+)"
+    name: kafka_connect_task_error_$3
+    type: GAUGE
+    labels:
+      connector: "$1"
+      task: "$2"
+  - pattern: "java.lang<type=Memory><HeapMemoryUsage>(used|max|committed)"
+    name: jvm_memory_heap_$1_bytes
+    type: GAUGE

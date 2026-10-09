@@ -1,0 +1,37 @@
+# {{ ansible_managed }}
+name: kafka-connect
+services:
+  kafka-connect:
+    image: "{{ kafka_connect_image }}"
+    container_name: kafka-connect
+    hostname: kafka-connect
+    restart: unless-stopped
+    ports:
+      - "{{ kafka_connect_port }}:8083"
+{% if kafka_connect_jmx_exporter_enabled %}
+      - "{{ kafka_connect_jmx_exporter_port }}:7072"
+{% endif %}
+    env_file:
+      - secrets.env
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms{{ kafka_connect_heap }} -Xmx{{ kafka_connect_heap }}"
+      KAFKA_LOG4J_OPTS: "-Dlog4j2.configurationFile=/opt/kafka/config/connect-log4j2.yaml"
+{% if kafka_connect_jmx_exporter_enabled %}
+      KAFKA_OPTS: "-javaagent:/opt/jmx/jmx_prometheus_javaagent.jar=7072:/opt/jmx/jmx-exporter.yml"
+{% endif %}
+    # The image starts a broker by default; run a Connect worker instead
+    command: ["/opt/kafka/bin/connect-distributed.sh", "/etc/kafka-connect/connect-distributed.properties"]
+    volumes:
+      - "{{ kafka_connect_ca_file }}:/etc/kafka-ca/ca.pem:ro"
+      - "{{ kafka_connect_project_dir }}/connect-distributed.properties:/etc/kafka-connect/connect-distributed.properties:ro"
+      - "{{ kafka_connect_project_dir }}/secrets:/etc/kafka-connect/secrets:ro"
+      - "{{ kafka_connect_project_dir }}/plugins:/opt/connect-plugins:ro"
+{% if kafka_connect_jmx_exporter_enabled %}
+      - "{{ kafka_connect_project_dir }}/jmx:/opt/jmx:ro"
+{% endif %}
+    healthcheck:
+      test: {{ kafka_connect_healthcheck | to_json }}
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s

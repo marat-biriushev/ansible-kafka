@@ -9,6 +9,7 @@
     - kafka_tls
     - node_exporter
     - schema_registry
+    - kafka_connect
     - kafka_ui
     - kafka_exporter
     - kafka_canary

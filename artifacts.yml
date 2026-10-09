@@ -25,6 +25,16 @@ artifacts:
     sha256: b51d8a76aa2a9156a55d501aca6276fae09e262259a5e4e831d2c2222f084e63
     used_on: all hosts
 
+# Kafka Connect plugins, downloaded into artifacts/connect-plugins/ and
+# installed by the kafka_connect role when listed in kafka_connect_plugins.
+# tar.gz preferred (zip needs unzip on the services VM). Example:
+#  - name: debezium-connector-postgres
+#    version: "<version>"
+#    file: debezium-connector-postgres-<version>-plugin.tar.gz
+#    url: https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/<version>/debezium-connector-postgres-<version>-plugin.tar.gz
+#    sha256: <sha256 of the file>
+connect_plugins: []
+
 # Ansible collections from requirements.yml, fetched with
 # "ansible-galaxy collection download" into artifacts/collections/.
 collections_requirements: requirements.yml

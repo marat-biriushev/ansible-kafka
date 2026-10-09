@@ -35,6 +35,8 @@ kafka_ui_kafka_password: "{{ vault_kafka_scram_passwords['kafka-ui'] }}"
 kafka_ui_login_password: "{{ vault_kafka_ui_login_password }}"
 kafka_exporter_kafka_password: "{{ vault_kafka_scram_passwords['kafka-exporter'] }}"
 kafka_canary_kafka_password: "{{ vault_kafka_scram_passwords['canary'] }}"
+kafka_connect_kafka_password: "{{ vault_kafka_scram_passwords['kafka-connect'] }}"
+kafka_connect_connector_secrets: "{{ vault_kafka_connect_connector_secrets | default({}) }}"
 
 # --- Service accounts, ACLs and topics (playbooks/users-acl.yml) -----------
 kafka_users_scram: >-
@@ -45,10 +47,11 @@ kafka_users_acls:
   - { principal: "User:schema-registry", resource_type: topic, name: _schemas, operations: [All] }
   - { principal: "User:schema-registry", resource_type: group, name: schema-registry, operations: [Read, Describe] }
   - { principal: "User:schema-registry", resource_type: cluster, operations: [DescribeConfigs] }
-  # Kafka UI: read-only
-  - { principal: "User:kafka-ui", resource_type: topic, name: "*", operations: [Describe, Read, DescribeConfigs] }
-  - { principal: "User:kafka-ui", resource_type: group, name: "*", operations: [Describe, Read] }
-  - { principal: "User:kafka-ui", resource_type: cluster, operations: [Describe, DescribeConfigs] }
+  # Kafka UI: may create and change everything (topics, messages, offsets, ACLs)
+  - { principal: "User:kafka-ui", resource_type: topic, name: "*", operations: [All] }
+  - { principal: "User:kafka-ui", resource_type: group, name: "*", operations: [All] }
+  - { principal: "User:kafka-ui", resource_type: transactional-id, name: "*", operations: [All] }
+  - { principal: "User:kafka-ui", resource_type: cluster, operations: [All] }
   # kafka-exporter: metadata and consumer group offsets
   - { principal: "User:kafka-exporter", resource_type: topic, name: "*", operations: [Describe] }
   - { principal: "User:kafka-exporter", resource_type: group, name: "*", operations: [Describe] }
@@ -57,6 +60,13 @@ kafka_users_acls:
   - { principal: "User:canary", resource_type: topic, name: __strimzi_canary, operations: [All] }
   - { principal: "User:canary", resource_type: group, name: canary, operations: [All] }
   - { principal: "User:canary", resource_type: cluster, operations: [Describe] }
+  # Kafka Connect worker: its internal topics and the connect-* groups of the
+  # sink connectors. Topics the connectors read or write need their own ACLs:
+  # either for User:kafka-connect, or (better) for a per-integration account
+  # the connector sets with producer.override.* / consumer.override.*.
+  - { principal: "User:kafka-connect", resource_type: topic, name: connect-, pattern_type: prefixed, operations: [All] }
+  - { principal: "User:kafka-connect", resource_type: group, name: connect-, pattern_type: prefixed, operations: [All] }
+  - { principal: "User:kafka-connect", resource_type: cluster, operations: [Describe, DescribeConfigs] }
 
 kafka_topics_list:
   - name: _schemas
@@ -65,8 +75,26 @@ kafka_topics_list:
     config:
       cleanup.policy: compact
       min.insync.replicas: 2
+  # Kafka Connect internal topics (compacted, RF=3)
+  - name: connect-configs
+    partitions: 1
+    replication_factor: 3
+    config: {cleanup.policy: compact, min.insync.replicas: 2}
+  - name: connect-offsets
+    partitions: 25
+    replication_factor: 3
+    config: {cleanup.policy: compact, min.insync.replicas: 2}
+  - name: connect-status
+    partitions: 5
+    replication_factor: 3
+    config: {cleanup.policy: compact, min.insync.replicas: 2}
 
 # --- Services VM ---------------------------------------------------------
 kafka_ui_auth_type: LOGIN_FORM
 kafka_ui_schema_registry_url: "http://{{ groups['kafka_services'][0] }}.{{ kafka_domain }}:8081"
+kafka_ui_kafka_connect_url: "http://{{ groups['kafka_services'][0] }}.{{ kafka_domain }}:8083"
 kafka_canary_enabled: true
+
+# Kafka Connect plugins from artifacts/connect-plugins/, pinned in
+# artifacts.yml (connect_plugins). Empty until the database connector is chosen.
+kafka_connect_plugins: []

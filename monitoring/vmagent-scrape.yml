@@ -1,7 +1,8 @@
 # scrape_configs fragment for the existing vmagent. Targets are TEST; copy
 # the blocks with the PROD addresses (172.31.60.111-114) or merge the lists.
 # Ports: 7071 JMX exporter (brokers; Schema Registry on the services VM),
-# 9100 node_exporter, 9308 kafka-exporter, 8082 canary.
+# 7072 JMX exporter in Kafka Connect, 9100 node_exporter, 9308 kafka-exporter,
+# 8082 canary.
 ---
 scrape_configs:
   - job_name: kafka-jmx
@@ -41,6 +42,14 @@ scrape_configs:
     static_configs:
       - targets:
           - int-res-test-kafkasvc01.ipa.ipotekabank.uz:7071
+        labels:
+          env: test
+          cluster: int-res-test
+
+  - job_name: kafka-connect
+    static_configs:
+      - targets:
+          - int-res-test-kafkasvc01.ipa.ipotekabank.uz:7072
         labels:
           env: test
           cluster: int-res-test
