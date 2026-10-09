@@ -1,0 +1,39 @@
+---
+name: lint
+
+"on":
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the linters
+        run: python -m pip install "ansible==14.*" "ansible-lint==26.*" yamllint shellcheck-py
+
+      - name: Roles do not reach the internet
+        run: scripts/check-offline.sh
+
+      - name: yamllint
+        run: yamllint -s .
+
+      - name: ansible-lint (production profile)
+        run: ansible-lint
+
+      - name: Syntax check
+        run: |
+          for env in test prod; do
+            for playbook in playbooks/*.yml; do
+              ansible-playbook -i "inventories/${env}/hosts.yml" "${playbook}" --syntax-check
+            done
+          done
+
+      - name: shellcheck
+        run: shellcheck scripts/*.sh
