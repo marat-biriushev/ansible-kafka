@@ -5,6 +5,12 @@
 
 Работай итерациями: сначала структура репозитория и инвентари, потом роли по одной. После каждой роли прогоняй `ansible-lint` и `ansible-playbook --syntax-check`. Если для решения нужен выбор, которого нет в ТЗ, бери вариант из раздела «Решения по умолчанию» и отмечай его в README.
 
+> **Важно: изолированная среда.** У серверов Kafka и у Ansible control node **нет доступа в интернет**. Все артефакты (дистрибутивы, jar, бинарники, образы контейнеров, Ansible-коллекции) скачиваются заранее на машине с интернетом и переносятся на control node вручную. Ни одна задача ролей не должна обращаться в интернет. Подробности — в разделе 12.
+>
+> **Combined mode на PROD — осознанное решение** (подтверждено владельцем). Выделенные контроллеры не делать.
+>
+> **Все действия на реальных хостах выполняет владелец репозитория сам.** Claude Code только пишет код и проверяет его локально (`ansible-lint`, `yamllint`, `--syntax-check`, molecule в контейнерах). Не запускать плейбуки, ad-hoc команды и SSH против хостов TEST/PROD, не пытаться к ним подключиться. Для каждого шага, который требует действий на хостах или на control node, README должен содержать точную команду, которую владелец выполнит сам, и что проверить после неё.
+
 ---
 
 ## 1. Инфраструктура
@@ -37,8 +43,8 @@ Bootstrap-имя для клиентов (DNS с несколькими A-зап
 
 | Параметр | Значение |
 |---|---|
-| Версия Kafka | Последний стабильный релиз 4.x (проверь на downloads.apache.org), закрепить в переменной `kafka_version`. Scala 2.13. |
-| Java | OpenJDK 21 headless из репозиториев RHEL (`java-21-openjdk-headless`) |
+| Версия Kafka | Последний стабильный релиз 4.x на момент написания кода, закрепить в `kafka_version` и в `artifacts.yml` (раздел 12). Scala 2.13. |
+| Java | OpenJDK 21 headless (`java-21-openjdk-headless`): по умолчанию из внутреннего dnf-репозитория; режим `java_install_method: rpm` ставит RPM из каталога артефактов (раздел 12) |
 | Режим | KRaft combined: `process.roles=broker,controller` на 3 узлах |
 | node.id | 1, 2, 3 (из host_vars) |
 | broker.rack | Переменная в host_vars, по умолчанию имя узла (`kafka01`…); в README пояснить, что значение должно соответствовать физическому хосту гипервизора |
@@ -90,7 +96,7 @@ Bootstrap-имя для клиентов (DNS с несколькими A-зап
 
 ## 4. Служебные сервисы (роль `kafka_services`, хост kafkasvc01)
 
-Запуск через **Podman + Quadlet** (`/etc/containers/systemd/*.container`), rootful, каждый сервис — systemd unit. Docker в RHEL 10 нет, docker-compose не использовать. Образы с закреплёнными тегами в переменных. Поддержать переменную `container_registry_mirror` для внутреннего зеркала.
+Запуск через **Podman + Quadlet** (`/etc/containers/systemd/*.container`), rootful, каждый сервис — systemd unit. Docker в RHEL 10 нет, docker-compose не использовать. Образы с закреплёнными тегами в переменных. Образы поставляются как архивы (`podman save` / `skopeo copy … oci-archive:`) из каталога артефактов: роль копирует архив на хост и загружает его (`containers.podman.podman_load`), только если образа с этим тегом ещё нет. Альтернативный режим — переменная `container_registry_mirror` для внутреннего registry, если он появится. Quadlet-юниты с `Pull=never`.
 
 | Сервис | Образ (по умолчанию) | Порт | Учётка | Минимальные ACL |
 |---|---|---|---|---|
@@ -111,8 +117,8 @@ Bootstrap-имя для клиентов (DNS с несколькими A-зап
 
 | Что | Требование |
 |---|---|
-| JMX Exporter | `jmx_prometheus_javaagent` (версия в переменной) как javaagent на порту 7071; конфиг с правилами для `kafka.server`, `kafka.controller`, `kafka.network`, `kafka.log`, `kafka.server:type=raft-metrics` |
-| node_exporter | Бинарь + systemd на всех узлах, порт 9100 |
+| JMX Exporter | `jmx_prometheus_javaagent` (jar из каталога артефактов, версия в переменной) как javaagent на порту 7071; конфиг с правилами для `kafka.server`, `kafka.controller`, `kafka.network`, `kafka.log`, `kafka.server:type=raft-metrics` |
+| node_exporter | Бинарь из tar.gz в каталоге артефактов + systemd на всех узлах, порт 9100 |
 | Scrape-конфиг | Положить в `monitoring/vmagent-scrape.yml` готовый фрагмент `scrape_configs` для vmagent (job'ы kafka-jmx, node, kafka-exporter, schema-registry). Сам vmagent не разворачивать — он в существующем стеке. |
 | Алерты | `monitoring/kafka-alerts.yml` в формате vmalert/Prometheus rules: OfflinePartitions > 0, ActiveControllerCount ≠ 1, UnderMinIsr > 0, UnderReplicated > 0 более 5 мин, FencedBrokerCount > 0, узел недоступен, диск /data > 75% / > 85%, consumer lag растёт, RequestHandlerAvgIdlePercent < 20%, сертификат истекает < 30 / < 7 дней, Schema Registry недоступен, canary error rate > 0. Имена метрик сверить с правилами JMX Exporter из этого же репозитория. |
 
@@ -124,7 +130,12 @@ Bootstrap-имя для клиентов (DNS с несколькими A-зап
 ansible-kafka/
 ├── README.md
 ├── ansible.cfg
-├── requirements.yml              # community.general, community.crypto, ansible.posix, containers.podman
+├── requirements.yml              # community.general, community.crypto, ansible.posix, containers.podman (версии закреплены)
+├── artifacts.yml                 # манифест офлайн-артефактов: имя, версия, URL, sha256/sha512
+├── artifacts/                    # сюда владелец кладёт скачанные файлы; в .gitignore, кроме README.md
+├── scripts/
+│   ├── fetch-artifacts.sh        # запускается на машине С интернетом, собирает бандл
+│   └── verify-artifacts.sh       # запускается на control node, сверяет контрольные суммы
 ├── inventories/
 │   ├── test/
 │   │   ├── hosts.yml             # группы: kafka, kafka_services
@@ -155,7 +166,7 @@ ansible-kafka/
 
 ### Установка
 1. Пользователь и группа `kafka`, каталоги `/opt/kafka` (симлинк на версию), `/etc/kafka`, `/data/kafka`, `/var/log/kafka`.
-2. Дистрибутив: скачать с `kafka_download_url` (по умолчанию `https://archive.apache.org/dist/kafka/...`) с проверкой SHA512, **или** взять локальный файл, если задан `kafka_local_archive` (банк может быть без интернета).
+2. Дистрибутив: только из каталога артефактов на control node (`{{ artifacts_dir }}/kafka_2.13-{{ kafka_version }}.tgz`). Проверить SHA512 из `artifacts.yml` на control node (`delegate_to: localhost`), скопировать на узел и распаковать (`unarchive` с `remote_src: false`). Никакого `get_url`.
 3. Шаблоны `server.properties`, `log4j2.yaml` (в Kafka 4.x — log4j2), `jvm`-опций; systemd unit `kafka.service` с `LimitNOFILE`, `KAFKA_HEAP_OPTS`, `KAFKA_OPTS` (javaagent), `TimeoutStopSec=300`.
 
 ### Форматирование хранилища — главная опасность
@@ -206,9 +217,10 @@ ansible-kafka/
 
 1. `ansible-lint` (профиль `production`) и `yamllint` без ошибок; `ansible-playbook --syntax-check` для всех плейбуков.
 2. Повторный прогон `site.yml` на уже развёрнутом стенде: `changed=0`.
-3. Molecule-сценарий для ролей `common` и `kafka` на образе AlmaLinux/Rocky 10 (3 контейнера, self-signed TLS): кластер поднимается, кворум 3/3, тестовый топик RF=3 создаётся, продюсер с `acks=all` от SCRAM-пользователя пишет, консьюмер читает.
+3. Molecule-сценарий (запускается на машине разработчика с интернетом; на control node не требуется) для ролей `common` и `kafka` на образе AlmaLinux/Rocky 10, с артефактами из `artifacts/`, (3 контейнера, self-signed TLS): кластер поднимается, кворум 3/3, тестовый топик RF=3 создаётся, продюсер с `acks=all` от SCRAM-пользователя пишет, консьюмер читает.
 4. Ручной тест на TEST, описанный в README: остановка одного узла → запись с `acks=all` продолжается; rolling restart проходит без ошибок у работающего продюсера (`kafka-producer-perf-test`).
-5. README: порядок развёртывания с нуля, генерация `cluster_id`/`directory_id`, подготовка сертификатов (что запросить у CA, какие SAN), команды запуска каждого плейбука, описание всех переменных, известные ограничения.
+5. В ролях нет обращений в интернет (проверка grep из раздела 11 проходит), а README описывает офлайн-процесс из раздела 12.
+6. README: порядок развёртывания с нуля, генерация `cluster_id`/`directory_id`, подготовка сертификатов (что запросить у CA, какие SAN), команды запуска каждого плейбука, описание всех переменных, известные ограничения.
 
 ---
 
@@ -216,5 +228,36 @@ ansible-kafka/
 
 - Не использовать `shell`/`command` там, где есть модуль. Если без них не обойтись (kafka-*.sh), задавать `changed_when`/`failed_when`.
 - Не логировать секреты: `no_log: true` на задачах с паролями.
-- Не коммитить реальные `vault.yml`, ключи и сертификаты; добавить `.gitignore`.
+- Не коммитить реальные `vault.yml`, ключи, сертификаты и содержимое `artifacts/`; добавить `.gitignore`.
+- Запрещены `get_url`, `uri` к внешним адресам, `pip install`, `dnf` с внешними репозиториями, `podman pull` в ролях. Проверка: `grep` по `roles/` на эти модули в CI/pre-commit.
+- Не выполнять ничего против реальных хостов (см. начало документа).
+
+---
+
+## 12. Офлайн-артефакты
+
+Процесс:
+1. Владелец на машине с интернетом клонирует репо и запускает `scripts/fetch-artifacts.sh`.
+2. Скрипт по `artifacts.yml` скачивает всё нужное, проверяет контрольные суммы и упаковывает в `ansible-kafka-artifacts-<дата>.tar.gz`.
+3. Владелец переносит архив на control node, распаковывает в `artifacts/`, запускает `scripts/verify-artifacts.sh`.
+4. Коллекции ставятся офлайн: `ansible-galaxy collection install -r requirements.yml -p ./collections --offline` из скачанных tar.gz (или `ansible-galaxy collection install artifacts/collections/*.tar.gz -p ./collections`); `ansible.cfg` указывает `collections_path = ./collections`.
+
+Состав `artifacts.yml` (версии — актуальные стабильные на момент написания, закрепить точно):
+
+| Артефакт | Формат | Где используется |
+|---|---|---|
+| Apache Kafka 2.13-`<version>` | `.tgz` + `.sha512` | kafka01–03 |
+| jmx_prometheus_javaagent | `.jar` | kafka01–03 |
+| node_exporter linux-amd64 | `.tar.gz` | все хосты |
+| Образы: schema-registry, kafka-ui, kafka-exporter, strimzi canary | `podman save` → `.tar` (linux/amd64) | kafkasvc01 |
+| Ansible-коллекции из `requirements.yml` | `ansible-galaxy collection download` → `.tar.gz` | control node |
+| OpenJDK 21 headless RPM с зависимостями (опционально, если нет внутреннего репо) | `dnf download --resolve` на RHEL 10 / Alma 10 | kafka01–03 |
+
+Требования к скрипту `fetch-artifacts.sh`:
+- Bash, идемпотентный: уже скачанные файлы с верной суммой не скачивает повторно.
+- Для образов — `podman` или `skopeo`, явно `--platform linux/amd64`.
+- В конце печатает список файлов, суммы и итоговый размер архива.
+- Для пакетов ОС (`podman`, `chrony`, `python3-cryptography`, `firewalld`, `java-21-openjdk-headless`) по умолчанию предполагается внутренний dnf-репозиторий (Satellite/зеркало). В README перечислить эти пакеты, чтобы владелец проверил их наличие заранее.
+
+Роли принимают `artifacts_dir` (по умолчанию `{{ playbook_dir }}/../artifacts`). Первая задача каждой роли проверяет наличие нужных файлов на control node и падает с понятным сообщением «положите X в artifacts/, см. README», если чего-то нет.
 - Коммиты небольшие и логичные (структура → common → kafka → services → monitoring → docs).
