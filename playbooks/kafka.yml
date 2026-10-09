@@ -1,0 +1,16 @@
+---
+- name: Kafka cluster (KRaft, combined broker+controller)
+  hosts: kafka
+  become: true
+  gather_facts: false
+  roles:
+    - kafka_tls
+    - kafka_jmx_exporter
+    - kafka
+    - node_exporter
+
+# Nodes whose configuration changed in this run are restarted one by one.
+- name: Rolling restart of changed nodes
+  ansible.builtin.import_playbook: rolling-restart.yml
+  vars:
+    kafka_rr_only_required: true

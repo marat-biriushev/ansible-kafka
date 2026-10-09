@@ -1,0 +1,11 @@
+---
+# Everything from scratch: the cluster, the service accounts and topics,
+# then the services VM. See README "Deployment from scratch".
+- name: Kafka cluster
+  ansible.builtin.import_playbook: kafka.yml
+
+- name: Service accounts, ACLs and service topics
+  ansible.builtin.import_playbook: users-acl.yml
+
+- name: Services VM
+  ansible.builtin.import_playbook: services.yml

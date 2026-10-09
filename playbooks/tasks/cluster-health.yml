@@ -1,0 +1,51 @@
+---
+# Cluster health as seen from the current host, over the INTERNAL listener.
+# Retries until healthy or kafka_rr_health_retries is exhausted. Use 1 for a
+# one-shot check: with retries 0 Ansible does not fail on an unmet until.
+# Healthy = no under-replicated and no unavailable partitions, every
+# controller is a voter, and no voter lags more than kafka_rr_max_lag.
+- name: Wait for no under-replicated or unavailable partitions
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_rr_home }}/bin/kafka-topics.sh"
+      - --bootstrap-server
+      - "{{ kafka_rr_bootstrap }}"
+      - --command-config
+      - "{{ kafka_rr_admin_config }}"
+      - --describe
+      - "{{ item }}"
+  loop:
+    - --under-replicated-partitions
+    - --unavailable-partitions
+  register: kafka_rr_partitions
+  changed_when: false
+  check_mode: false
+  until: kafka_rr_partitions.rc == 0 and kafka_rr_partitions.stdout | trim | length == 0
+  retries: "{{ kafka_rr_health_retries }}"
+  delay: "{{ kafka_rr_health_delay }}"
+
+- name: Wait for the full quorum
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_rr_home }}/bin/kafka-metadata-quorum.sh"
+      - --bootstrap-server
+      - "{{ kafka_rr_bootstrap }}"
+      - --command-config
+      - "{{ kafka_rr_admin_config }}"
+      - describe
+      - --replication
+  register: kafka_rr_quorum
+  changed_when: false
+  check_mode: false
+  # Columns: NodeId DirectoryId LogEndOffset Lag LastFetchTimestamp LastCaughtUpTimestamp Status
+  until: >-
+    kafka_rr_quorum.rc == 0
+    and (_voters | length) == groups['kafka'] | length
+    and (_voters | map(attribute='1') | map('int') | max) <= kafka_rr_max_lag | int
+  vars:
+    # [(node id, lag, status), ...] for Leader and Follower rows; observers do not count
+    _voters: >-
+      {{ kafka_rr_quorum.stdout | default('')
+         | regex_findall('(?m)^\s*(\d+)\s+\S+\s+\d+\s+(\d+)\s+\S+\s+\S+\s+(Leader|Follower)\s*$') }}
+  retries: "{{ kafka_rr_health_retries }}"
+  delay: "{{ kafka_rr_health_delay }}"

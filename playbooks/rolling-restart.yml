@@ -1,0 +1,147 @@
+---
+# Rolling restart of the Kafka cluster, one node at a time, active controller
+# last, without downtime for clients that use acks=all and min.insync.replicas=2.
+#
+#   ansible-playbook -i inventories/test/hosts.yml playbooks/rolling-restart.yml --check   # show the order
+#   ansible-playbook -i inventories/test/hosts.yml playbooks/rolling-restart.yml
+#
+# site.yml and kafka.yml import this playbook with kafka_rr_only_required=true:
+# then only the nodes whose config changed in that run are restarted.
+
+- name: Plan the rolling restart
+  hosts: kafka
+  gather_facts: false
+  become: true
+  vars: &kafka_rr_vars
+    kafka_rr_home: "{{ kafka_home | default('/opt/kafka') }}"
+    kafka_rr_admin_config: "{{ kafka_conf_dir | default('/etc/kafka') }}/admin.properties"
+    kafka_rr_fqdn: "{{ inventory_hostname ~ (('.' ~ kafka_domain) if kafka_domain | default('') else '') }}"
+    kafka_rr_bootstrap: "{{ kafka_rr_fqdn }}:{{ kafka_internal_port | default(9091) }}"
+    kafka_rr_only_required: false
+    # How long a restarted node may take to rejoin and catch up (seconds)
+    kafka_rr_timeout: 900
+    kafka_rr_health_delay: 10
+    kafka_rr_max_lag: 1000
+  tasks:
+    - name: Find the active controller
+      ansible.builtin.command:
+        argv:
+          - "{{ kafka_rr_home }}/bin/kafka-metadata-quorum.sh"
+          - --bootstrap-server
+          - "{{ kafka_rr_bootstrap }}"
+          - --command-config
+          - "{{ kafka_rr_admin_config }}"
+          - describe
+          - --status
+      register: kafka_rr_status
+      changed_when: false
+      check_mode: false
+      run_once: true
+
+    - name: Put the active controller last
+      ansible.builtin.set_fact:
+        kafka_rr_order: "{{ (_targets | reject('equalto', _leader) | list) + ([_leader] if _leader in _targets else []) }}"
+      vars:
+        _leader_id: "{{ kafka_rr_status.stdout | regex_search('(?m)^LeaderId:\\s*(\\d+)', '\\1') | first }}"
+        _leader: >-
+          {% for h in groups['kafka'] if hostvars[h].kafka_node_id | string == _leader_id %}{{ h }}{% endfor %}
+        _required: >-
+          {{ groups['kafka'] | map('extract', hostvars) | selectattr('kafka_restart_required', 'defined')
+             | selectattr('kafka_restart_required') | map(attribute='inventory_hostname') | list }}
+        _targets: >-
+          {{ groups['kafka'] | select('in', ansible_play_hosts_all)
+             | select('in', _required if kafka_rr_only_required | bool else groups['kafka']) | list }}
+      run_once: true
+
+    - name: Pre-check the cluster health
+      ansible.builtin.include_tasks: tasks/cluster-health.yml
+      vars:
+        kafka_rr_health_retries: 1
+      when: kafka_rr_order | length > 0
+      run_once: true
+
+    - name: Show the restart order
+      ansible.builtin.debug:
+        msg: >-
+          {{ ('Restart order (active controller last): ' ~ kafka_rr_order | join(' -> '))
+             if kafka_rr_order else 'Nothing to restart' }}
+      run_once: true
+
+    - name: Queue the nodes in that order
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: kafka_rr_queue
+      loop: "{{ kafka_rr_order }}"
+      changed_when: false
+      run_once: true
+
+- name: Restart one node at a time
+  hosts: kafka_rr_queue
+  serial: 1
+  any_errors_fatal: true
+  gather_facts: false
+  become: true
+  vars: *kafka_rr_vars
+  tasks:
+    - name: Check the cluster health before this node
+      ansible.builtin.include_tasks: tasks/cluster-health.yml
+      vars:
+        kafka_rr_health_retries: 1
+
+    - name: Restart Kafka
+      ansible.builtin.systemd_service:
+        name: kafka
+        state: restarted
+        daemon_reload: true
+
+    - name: Wait for the listeners
+      ansible.builtin.wait_for:
+        host: "{{ kafka_listen_address | default('127.0.0.1', true) }}"
+        port: "{{ item }}"
+        timeout: "{{ kafka_rr_timeout }}"
+      loop:
+        - "{{ kafka_internal_port | default(9091) }}"
+        - "{{ kafka_client_port | default(9092) }}"
+      when: not ansible_check_mode
+
+    - name: Wait until the node has caught up and rejoined the quorum
+      ansible.builtin.include_tasks: tasks/cluster-health.yml
+      vars:
+        kafka_rr_health_retries: "{{ (kafka_rr_timeout | int / kafka_rr_health_delay | int) | round(0, 'ceil') | int }}"
+      when: not ansible_check_mode
+
+    - name: Clear the restart flag
+      ansible.builtin.set_fact:
+        kafka_restart_required: false
+
+- name: Move leadership back to the preferred replicas
+  hosts: kafka_rr_queue
+  gather_facts: false
+  become: true
+  vars: *kafka_rr_vars
+  tasks:
+    - name: Run a preferred leader election
+      ansible.builtin.command:
+        argv:
+          - "{{ kafka_rr_home }}/bin/kafka-leader-election.sh"
+          - --bootstrap-server
+          - "{{ kafka_rr_bootstrap }}"
+          - --admin.config
+          - "{{ kafka_rr_admin_config }}"
+          - --election-type
+          - preferred
+          - --all-topic-partitions
+      register: kafka_rr_election
+      changed_when: "'Successfully completed leader election' in kafka_rr_election.stdout"
+      failed_when: false
+      run_once: true
+
+    - name: Fail on a real election error
+      ansible.builtin.assert:
+        that: >-
+          kafka_rr_election.rc == 0
+          or 'Valid replica already elected' in kafka_rr_election.stdout ~ kafka_rr_election.stderr
+        fail_msg: "{{ kafka_rr_election.stderr | default(kafka_rr_election.stdout) }}"
+        quiet: true
+      run_once: true
+      when: not ansible_check_mode

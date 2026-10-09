@@ -1,0 +1,10 @@
+---
+# Service SCRAM accounts, their ACLs and the topics the services need.
+# Runs the admin tools on one broker over the INTERNAL listener.
+- name: Service topics, SCRAM accounts and ACLs
+  hosts: kafka[0]
+  become: true
+  gather_facts: false
+  roles:
+    - kafka_topics
+    - kafka_users

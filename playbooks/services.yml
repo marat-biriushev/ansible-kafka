@@ -1,0 +1,14 @@
+---
+# Docker and the compose plugin are installed beforehand with the docker
+# role from ansible-ib. Images come from the Nexus docker-proxy.
+- name: Services VM
+  hosts: kafka_services
+  become: true
+  gather_facts: false
+  roles:
+    - kafka_tls
+    - node_exporter
+    - schema_registry
+    - kafka_ui
+    - kafka_exporter
+    - kafka_canary
