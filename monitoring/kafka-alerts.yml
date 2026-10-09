@@ -1,0 +1,133 @@
+# vmalert / Prometheus rules. Metric names come from the JMX exporter rules
+# in roles/kafka_jmx_exporter/templates/jmx-exporter.yml.j2, node_exporter,
+# kafka-exporter and the canary. Job names match vmagent-scrape.yml.
+---
+groups:
+  - name: kafka-cluster
+    rules:
+      - alert: KafkaOfflinePartitions
+        expr: max by (cluster) (kafka_controller_kafkacontroller_offlinepartitionscount) > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.cluster }}: {{ $value }} offline partitions"
+          description: Partitions without a leader; producers and consumers of them are down.
+
+      - alert: KafkaActiveControllerCountNotOne
+        expr: sum by (cluster) (kafka_controller_kafkacontroller_activecontrollercount) != 1
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.cluster }}: {{ $value }} active controllers (expected 1)"
+
+      - alert: KafkaUnderMinIsrPartitions
+        expr: sum by (cluster, instance) (kafka_server_replicamanager_underminisrpartitioncount) > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.instance }}: {{ $value }} partitions below min.insync.replicas"
+          description: Writes with acks=all to these partitions fail.
+
+      - alert: KafkaUnderReplicatedPartitions
+        expr: sum by (cluster, instance) (kafka_server_replicamanager_underreplicatedpartitions) > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.instance }}: {{ $value }} under-replicated partitions for 5 minutes"
+
+      - alert: KafkaFencedBrokers
+        expr: max by (cluster) (kafka_controller_kafkacontroller_fencedbrokercount) > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.cluster }}: {{ $value }} fenced brokers"
+
+      - alert: KafkaRequestHandlerIdleLow
+        expr: kafka_server_kafkarequesthandlerpool_requesthandleravgidlepercent < 0.2
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.instance }}: request handlers idle {{ $value | humanizePercentage }}"
+          description: Request handler threads are saturated (idle below 20%).
+
+      - alert: KafkaJmxExporterDown
+        expr: up{job="kafka-jmx"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.instance }}: Kafka broker metrics unavailable (broker down?)"
+
+  - name: kafka-nodes
+    rules:
+      - alert: KafkaNodeDown
+        expr: up{job="node"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.instance }}: node_exporter unreachable"
+
+      - alert: KafkaDataDiskUsageHigh
+        expr: |
+          (1 - node_filesystem_avail_bytes{job="node", mountpoint="/data"}
+               / node_filesystem_size_bytes{job="node", mountpoint="/data"}) > 0.75
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.instance }}: /data is {{ $value | humanizePercentage }} full"
+
+      - alert: KafkaDataDiskUsageCritical
+        expr: |
+          (1 - node_filesystem_avail_bytes{job="node", mountpoint="/data"}
+               / node_filesystem_size_bytes{job="node", mountpoint="/data"}) > 0.85
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.instance }}: /data is {{ $value | humanizePercentage }} full"
+
+      # Written by the kafka_tls role into the node_exporter textfile directory
+      - alert: KafkaCertificateExpiresSoon
+        expr: (kafka_tls_certificate_not_after_seconds - time()) < 30 * 86400
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.instance }}: broker certificate expires in {{ $value | humanizeDuration }}"
+
+      - alert: KafkaCertificateExpiresVerySoon
+        expr: (kafka_tls_certificate_not_after_seconds - time()) < 7 * 86400
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.instance }}: broker certificate expires in {{ $value | humanizeDuration }}"
+
+  - name: kafka-clients
+    rules:
+      - alert: KafkaConsumerLagGrowing
+        expr: |
+          sum by (cluster, consumergroup, topic) (kafka_consumergroup_lag) > 0
+          and
+          deriv(sum by (cluster, consumergroup, topic) (kafka_consumergroup_lag)[15m:1m]) > 0
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.consumergroup }} on {{ $labels.topic }}: lag keeps growing"
+
+      - alert: SchemaRegistryDown
+        expr: up{job="schema-registry"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.instance }}: Schema Registry unavailable"
+
+      - alert: KafkaExporterDown
+        expr: up{job="kafka-exporter"} == 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.instance }}: kafka-exporter unavailable, consumer lag is not monitored"
+
+      - alert: KafkaCanaryErrors
+        expr: |
+          sum by (cluster) (rate(strimzi_canary_records_produced_failed_total[5m]))
+          + sum by (cluster) (rate(strimzi_canary_consumer_error_total[5m])) > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.cluster }}: canary produce/consume errors"

@@ -1,0 +1,54 @@
+# scrape_configs fragment for the existing vmagent. Targets are TEST; copy
+# the blocks with the PROD addresses (172.31.60.111-114) or merge the lists.
+# Ports: 7071 JMX exporter (brokers; Schema Registry on the services VM),
+# 9100 node_exporter, 9308 kafka-exporter, 8082 canary.
+---
+scrape_configs:
+  - job_name: kafka-jmx
+    scrape_interval: 30s
+    scrape_timeout: 25s
+    static_configs:
+      - targets:
+          - int-res-test-kafka01.ipa.ipotekabank.uz:7071
+          - int-res-test-kafka02.ipa.ipotekabank.uz:7071
+          - int-res-test-kafka03.ipa.ipotekabank.uz:7071
+        labels:
+          env: test
+          cluster: int-res-test
+
+  - job_name: node
+    static_configs:
+      - targets:
+          - int-res-test-kafka01.ipa.ipotekabank.uz:9100
+          - int-res-test-kafka02.ipa.ipotekabank.uz:9100
+          - int-res-test-kafka03.ipa.ipotekabank.uz:9100
+          - int-res-test-kafkasvc01.ipa.ipotekabank.uz:9100
+        labels:
+          env: test
+          cluster: int-res-test
+
+  - job_name: kafka-exporter
+    scrape_interval: 30s
+    scrape_timeout: 25s
+    static_configs:
+      - targets:
+          - int-res-test-kafkasvc01.ipa.ipotekabank.uz:9308
+        labels:
+          env: test
+          cluster: int-res-test
+
+  - job_name: schema-registry
+    static_configs:
+      - targets:
+          - int-res-test-kafkasvc01.ipa.ipotekabank.uz:7071
+        labels:
+          env: test
+          cluster: int-res-test
+
+  - job_name: kafka-canary
+    static_configs:
+      - targets:
+          - int-res-test-kafkasvc01.ipa.ipotekabank.uz:8082
+        labels:
+          env: test
+          cluster: int-res-test
