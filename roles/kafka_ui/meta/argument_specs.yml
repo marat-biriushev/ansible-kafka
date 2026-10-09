@@ -36,6 +36,9 @@ argument_specs:
       kafka_ui_schema_registry_url:
         description: Schema Registry URL; empty hides it.
         type: str
+      kafka_ui_kafka_connect_url:
+        description: Kafka Connect REST URL; empty hides the Connect pages.
+        type: str
       kafka_ui_auth_type:
         description: LOGIN_FORM, OAUTH2 or LDAP.
         type: str

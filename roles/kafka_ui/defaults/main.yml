@@ -4,14 +4,17 @@ kafka_ui_project_dir: /opt/kafka-ui
 kafka_ui_port: 8080
 kafka_ui_cluster_name: "{{ kafka_env | default('kafka') }}"
 
-# Kafka connection: CLIENT listener, SCRAM-SHA-512 over TLS. The account has
-# read-only ACLs; the UI is also switched to read-only mode.
+# Kafka connection: CLIENT listener, SCRAM-SHA-512 over TLS. The UI may
+# create and change everything (topics, messages, consumer offsets, ACLs,
+# schemas, connectors); the kafka-ui account has All ACLs to match.
 kafka_ui_bootstrap_servers: "{{ kafka_bootstrap_servers }}"
 kafka_ui_kafka_user: kafka-ui
 kafka_ui_kafka_password: ""
 kafka_ui_ca_file: /etc/kafka-services/ca.pem
-kafka_ui_readonly: true
+kafka_ui_readonly: false
 kafka_ui_schema_registry_url: ""
+# Kafka Connect REST URL; empty hides the Connect pages
+kafka_ui_kafka_connect_url: ""
 
 # Web login: LOGIN_FORM | OAUTH2 | LDAP. LOGIN_FORM uses the two variables
 # below; for OAUTH2 / LDAP put the Spring settings into kafka_ui_auth_env

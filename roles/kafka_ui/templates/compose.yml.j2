@@ -20,6 +20,10 @@ services:
 {% if kafka_ui_schema_registry_url %}
       KAFKA_CLUSTERS_0_SCHEMAREGISTRY: "{{ kafka_ui_schema_registry_url }}"
 {% endif %}
+{% if kafka_ui_kafka_connect_url %}
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: kafka-connect
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: "{{ kafka_ui_kafka_connect_url }}"
+{% endif %}
       AUTH_TYPE: "{{ kafka_ui_auth_type }}"
 {% if kafka_ui_auth_type == 'LOGIN_FORM' %}
       SPRING_SECURITY_USER_NAME: "{{ kafka_ui_login_user }}"

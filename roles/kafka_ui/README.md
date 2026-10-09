@@ -1,8 +1,14 @@
 # kafka_ui
 
 Kafka UI (kafbat) as a Docker compose project in `/opt/kafka-ui/`, port
-8080. Kafka over SASL_SSL / SCRAM-SHA-512 with the read-only `kafka-ui`
-account, and the UI itself in read-only mode.
+8080. Kafka over SASL_SSL / SCRAM-SHA-512 with the `kafka-ui` account.
+
+The UI is **not** read-only: whoever logs in can create and delete topics,
+produce messages, reset consumer offsets, manage ACLs, schemas (Schema
+Registry) and connectors (Kafka Connect, `kafka_ui_kafka_connect_url`).
+The `kafka-ui` account has All on topics, groups, transactional IDs and
+the cluster to match. With `LOGIN_FORM` that means one shared password is
+full admin; use `OAUTH2` / `LDAP` with RBAC on PROD.
 
 Web login is set with `kafka_ui_auth_type`:
 
@@ -27,8 +33,9 @@ All of them are in `defaults/main.yml` and validated by `meta/argument_specs.yml
 | `kafka_ui_kafka_user` | `kafka-ui` | SCRAM account (read-only ACLs). |
 | `kafka_ui_kafka_password` | `""` | Its password (vault). |
 | `kafka_ui_ca_file` | `/etc/kafka-services/ca.pem` | CA file on the host, mounted read-only. |
-| `kafka_ui_readonly` | `true` | Read-only mode in the UI. |
+| `kafka_ui_readonly` | `false` | Read-only mode in the UI. |
 | `kafka_ui_schema_registry_url` | `""` | Schema Registry URL; empty hides it. |
+| `kafka_ui_kafka_connect_url` | `""` | Kafka Connect REST URL; empty hides the Connect pages. |
 | `kafka_ui_auth_type` | `LOGIN_FORM` | LOGIN_FORM, OAUTH2 or LDAP. |
 | `kafka_ui_login_user` | `admin` | LOGIN_FORM user. |
 | `kafka_ui_login_password` | `""` | LOGIN_FORM password (vault). |
