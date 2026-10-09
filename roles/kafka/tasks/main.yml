@@ -1,0 +1,141 @@
+---
+- name: Check the node identity
+  ansible.builtin.assert:
+    that:
+      - kafka_node_id | string is match('^[0-9]+$')
+      - kafka_cluster_id | length > 0
+      - kafka_directory_id | length > 0
+    fail_msg: >-
+      kafka_node_id, kafka_cluster_id (group_vars) and kafka_directory_id (host_vars) must be set
+      before the first run. Generate each UUID once with
+      "kafka_{{ kafka_scala_version }}-{{ kafka_version }}/bin/kafka-storage.sh random-uuid"
+      (one for the cluster, one per node) and commit them to the inventory. See README "Cluster and directory IDs".
+    quiet: true
+
+- name: Check that node and directory IDs are unique across the cluster
+  ansible.builtin.assert:
+    that:
+      - _node_ids | unique | length == _node_ids | length
+      - _dir_ids | unique | length == _dir_ids | length
+    fail_msg: kafka_node_id and kafka_directory_id must differ between the hosts of the {{ kafka_cluster_group }} group.
+    quiet: true
+  vars:
+    _node_ids: "{{ groups[kafka_cluster_group] | map('extract', hostvars, 'kafka_node_id') | map('string') | list }}"
+    _dir_ids: "{{ groups[kafka_cluster_group] | map('extract', hostvars, 'kafka_directory_id') | list }}"
+  run_once: true
+
+- name: Check the secrets
+  ansible.builtin.assert:
+    that:
+      - kafka_admin_password | length >= 12
+      # kafka-storage --add-scram parses name=..,password=.. inside [ ]
+      - kafka_admin_password is not search('[,\[\]"=\s]')
+      - kafka_tls_keystore_password | length >= 6
+      - kafka_tls_truststore_password | length >= 6
+    fail_msg: >-
+      kafka_admin_password (12+ characters, none of , [ ] " = or spaces) and the keystore/truststore
+      passwords must be set in the vault.
+    quiet: true
+  no_log: true
+
+- name: Check the artifacts on the control node
+  ansible.builtin.import_tasks: artifacts.yml
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+
+- name: Create the kafka group
+  ansible.builtin.group:
+    name: "{{ kafka_group }}"
+    system: true
+
+- name: Create the kafka user
+  ansible.builtin.user:
+    name: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    system: true
+    shell: /sbin/nologin
+    home: "{{ kafka_home }}"
+    create_home: false
+
+- name: Create the Kafka directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ kafka_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ kafka_conf_dir }}", owner: root, mode: "0750" }
+    - { path: "{{ kafka_data_dir }}", owner: "{{ kafka_user }}", mode: "0750" }
+    - { path: "{{ kafka_log_dir }}", owner: "{{ kafka_user }}", mode: "0750" }
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Unpack Kafka {{ kafka_version }}
+  ansible.builtin.unarchive:
+    src: "{{ kafka_artifacts_dir }}/{{ kafka_tarball }}"
+    dest: "{{ kafka_install_root }}"
+    remote_src: false
+    owner: root
+    group: root
+    creates: "{{ kafka_install_dir }}/bin/kafka-server-start.sh"
+
+- name: Point the kafka_home symlink at Kafka {{ kafka_version }}
+  ansible.builtin.file:
+    src: "{{ kafka_install_dir }}"
+    dest: "{{ kafka_home }}"
+    state: link
+    force: true
+  notify: Kafka restart required
+
+- name: Deploy the Kafka configuration
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ kafka_conf_dir }}/{{ item.dest }}"
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: server.properties.j2, dest: server.properties, mode: "0600" }
+    - { src: log4j2.yaml.j2, dest: log4j2.yaml, mode: "0640" }
+    - { src: kafka.env.j2, dest: kafka.env, mode: "0640" }
+  loop_control:
+    label: "{{ item.dest }}"
+  notify: Kafka restart required
+  no_log: true
+
+- name: Deploy admin.properties for the admin tools
+  ansible.builtin.template:
+    src: admin.properties.j2
+    dest: "{{ kafka_conf_dir }}/admin.properties"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Deploy kafka.service
+  ansible.builtin.template:
+    src: kafka.service.j2
+    dest: /etc/systemd/system/kafka.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Kafka restart required
+
+- name: Format the storage
+  ansible.builtin.import_tasks: storage.yml
+
+- name: Enable and start Kafka
+  ansible.builtin.systemd_service:
+    name: kafka
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait for the cluster
+  ansible.builtin.import_tasks: wait.yml
+  when: not ansible_check_mode
+
+- name: Decide on a rolling restart
+  ansible.builtin.meta: flush_handlers

@@ -1,0 +1,33 @@
+---
+# Generated from defaults/main.yml; keep the two in sync.
+argument_specs:
+  main:
+    short_description: jmx_prometheus_javaagent jar and rules for the Kafka brokers
+    options:
+      kafka_jmx_exporter_version:
+        description: jmx_prometheus_javaagent version; must match artifacts.yml.
+        type: str
+      kafka_jmx_exporter_file:
+        description: Jar file name in artifacts/.
+        type: str
+      kafka_jmx_exporter_artifacts_dir:
+        description: Directory with the offline artifacts on the control node.
+        type: str
+      kafka_jmx_exporter_artifacts_manifest:
+        description: Path of artifacts.yml on the control node.
+        type: str
+      kafka_jmx_exporter_dir:
+        description: Directory for the jar on the broker.
+        type: str
+      kafka_jmx_exporter_jar:
+        description: Path of the javaagent jar on the broker.
+        type: str
+      kafka_jmx_exporter_config:
+        description: Path of the exporter rules on the broker.
+        type: str
+      kafka_jmx_exporter_port:
+        description: Port of the JMX exporter HTTP endpoint.
+        type: int
+      kafka_jmx_exporter_group:
+        description: Group that may read the rules file (Kafka's group).
+        type: str

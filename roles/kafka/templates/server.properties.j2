@@ -1,0 +1,81 @@
+# {{ ansible_managed }}
+{% set bind = kafka_listen_address %}
+{% set voters = [] %}
+{% for fqdn in kafka_cluster_fqdns %}
+{%   set _ = voters.append(fqdn ~ ':' ~ kafka_controller_port) %}
+{% endfor %}
+
+############################## KRaft ##############################
+process.roles=broker,controller
+node.id={{ kafka_node_id }}
+broker.rack={{ kafka_rack }}
+controller.quorum.bootstrap.servers={{ voters | join(',') }}
+controller.listener.names=CONTROLLER
+
+############################## Listeners ##########################
+listeners=CLIENT://{{ bind }}:{{ kafka_client_port }},INTERNAL://{{ bind }}:{{ kafka_internal_port }},CONTROLLER://{{ bind }}:{{ kafka_controller_port }}
+advertised.listeners=CLIENT://{{ kafka_fqdn }}:{{ kafka_client_port }},INTERNAL://{{ kafka_fqdn }}:{{ kafka_internal_port }},CONTROLLER://{{ kafka_fqdn }}:{{ kafka_controller_port }}
+listener.security.protocol.map=CLIENT:SASL_SSL,INTERNAL:SSL,CONTROLLER:SSL
+inter.broker.listener.name=INTERNAL
+
+# CLIENT: SCRAM-SHA-512 over TLS
+sasl.enabled.mechanisms=SCRAM-SHA-512
+listener.name.client.sasl.enabled.mechanisms=SCRAM-SHA-512
+listener.name.client.scram-sha-512.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required;
+
+# INTERNAL and CONTROLLER: mutual TLS
+listener.name.internal.ssl.client.auth=required
+listener.name.controller.ssl.client.auth=required
+
+############################## TLS ################################
+ssl.keystore.type=PKCS12
+ssl.keystore.location={{ kafka_tls_keystore }}
+ssl.keystore.password={{ kafka_tls_keystore_password }}
+ssl.key.password={{ kafka_tls_keystore_password }}
+ssl.truststore.type=PKCS12
+ssl.truststore.location={{ kafka_tls_truststore }}
+ssl.truststore.password={{ kafka_tls_truststore_password }}
+ssl.enabled.protocols={{ kafka_tls_protocols }}
+ssl.endpoint.identification.algorithm=https
+# Certificate principal = CN, so super.users can name brokers by FQDN
+ssl.principal.mapping.rules=RULE:^CN=([^,]+).*$/$1/,DEFAULT
+
+############################## Authorization ######################
+authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer
+allow.everyone.if.no.acl.found=false
+super.users={{ kafka_super_users | join(';') }}
+
+############################## Replication and durability #########
+default.replication.factor={{ kafka_default_replication_factor }}
+min.insync.replicas={{ kafka_min_insync_replicas }}
+offsets.topic.replication.factor=3
+transaction.state.log.replication.factor=3
+transaction.state.log.min.isr=2
+share.coordinator.state.topic.replication.factor=3
+share.coordinator.state.topic.min.isr=2
+unclean.leader.election.enable=false
+auto.create.topics.enable=false
+controlled.shutdown.enable=true
+replica.selector.class=org.apache.kafka.common.replica.RackAwareReplicaSelector
+
+############################## Storage ############################
+log.dirs={{ kafka_data_dir }}
+num.partitions={{ kafka_num_partitions }}
+num.recovery.threads.per.data.dir=2
+log.retention.hours={{ kafka_log_retention_hours }}
+log.segment.bytes=1073741824
+log.retention.check.interval.ms=300000
+
+############################## Threads and sockets ################
+num.network.threads={{ kafka_num_network_threads }}
+num.io.threads={{ kafka_num_io_threads }}
+socket.send.buffer.bytes=102400
+socket.receive.buffer.bytes=102400
+socket.request.max.bytes=104857600
+{% if kafka_server_properties_extra %}
+
+############################## Extra ##############################
+{% for key, value in kafka_server_properties_extra | dictsort %}
+{{ key }}={{ value }}
+{% endfor %}
+{% endif %}

@@ -1,0 +1,10 @@
+---
+# Config changes never restart a running broker here. The fact is picked up
+# by playbooks/rolling-restart.yml at the end of site.yml / kafka.yml, which
+# restarts one node at a time. When Kafka was not running before this run
+# (first install) there is nothing to restart. ansible_facts.services is the
+# snapshot taken by service_facts at the start of the role.
+- name: Kafka restart required
+  ansible.builtin.set_fact:
+    kafka_restart_required: true
+  when: ansible_facts.services['kafka.service'].state | default('') == 'running'

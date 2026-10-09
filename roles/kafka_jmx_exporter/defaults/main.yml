@@ -1,0 +1,15 @@
+---
+kafka_jmx_exporter_version: "1.7.0"
+kafka_jmx_exporter_file: "jmx_prometheus_javaagent-{{ kafka_jmx_exporter_version }}.jar"
+kafka_jmx_exporter_artifacts_dir: "{{ artifacts_dir | default(playbook_dir ~ '/../artifacts') }}"
+kafka_jmx_exporter_artifacts_manifest: "{{ artifacts_manifest | default(playbook_dir ~ '/../artifacts.yml') }}"
+
+# These three must match kafka_jmx_exporter_* in the kafka role, which adds
+# -javaagent:<jar>=<port>:<config> to KAFKA_OPTS.
+kafka_jmx_exporter_dir: /opt/jmx_exporter
+kafka_jmx_exporter_jar: "{{ kafka_jmx_exporter_dir }}/jmx_prometheus_javaagent.jar"
+kafka_jmx_exporter_config: /etc/kafka/jmx-exporter.yml
+kafka_jmx_exporter_port: 7071
+
+# Owner of the config file (the Kafka service account)
+kafka_jmx_exporter_group: kafka

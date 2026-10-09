@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+# Client config for admin commands over the INTERNAL listener (mTLS, the
+# broker's own certificate, which is a super user).
+security.protocol=SSL
+ssl.keystore.type=PKCS12
+ssl.keystore.location={{ kafka_tls_keystore }}
+ssl.keystore.password={{ kafka_tls_keystore_password }}
+ssl.key.password={{ kafka_tls_keystore_password }}
+ssl.truststore.type=PKCS12
+ssl.truststore.location={{ kafka_tls_truststore }}
+ssl.truststore.password={{ kafka_tls_truststore_password }}
+ssl.enabled.protocols={{ kafka_tls_protocols }}

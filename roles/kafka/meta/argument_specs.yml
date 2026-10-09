@@ -1,0 +1,176 @@
+---
+# Generated from defaults/main.yml; keep the two in sync.
+argument_specs:
+  main:
+    short_description: Install and run Apache Kafka in KRaft combined mode (broker+controller)
+    options:
+      kafka_version:
+        description: Kafka release; must match the kafka entry in artifacts.yml.
+        type: str
+      kafka_scala_version:
+        description: Scala build of the tarball.
+        type: str
+      kafka_tarball:
+        description: Tarball file name in artifacts/.
+        type: str
+      kafka_artifacts_dir:
+        description: Directory with the offline artifacts on the control node (global artifacts_dir if set).
+        type: str
+      kafka_artifacts_manifest:
+        description: Path of artifacts.yml on the control node (global artifacts_manifest if set).
+        type: str
+      kafka_user:
+        description: Service account Kafka runs as.
+        type: str
+      kafka_group:
+        description: Group of the service account.
+        type: str
+      kafka_install_root:
+        description: Where versioned Kafka directories are unpacked.
+        type: str
+      kafka_home:
+        description: Symlink to the active version; used by the unit and the admin tools.
+        type: str
+      kafka_install_dir:
+        description: Versioned install directory.
+        type: str
+      kafka_conf_dir:
+        description: Configuration directory (server.properties, log4j2.yaml, kafka.env, admin.properties).
+        type: str
+      kafka_data_dir:
+        description: log.dirs on the data disk; meta.properties lives here.
+        type: str
+      kafka_log_dir:
+        description: Application logs (server.log, kafka-authorizer.log, ...).
+        type: str
+      kafka_node_id:
+        description: node.id, unique per node (host_vars). Required.
+        type: raw
+      kafka_cluster_id:
+        description: Cluster UUID from kafka-storage.sh random-uuid (group_vars). Required, never changes.
+        type: str
+      kafka_directory_id:
+        description: Metadata log directory UUID of this node (host_vars). Required, never changes.
+        type: str
+      kafka_rack:
+        description: broker.rack; must name the hypervisor host the VM runs on.
+        type: str
+      kafka_domain:
+        description: DNS domain appended to inventory hostnames.
+        type: str
+      kafka_fqdn:
+        description: FQDN of this node, used in advertised.listeners and certificates.
+        type: str
+      kafka_domain_suffix:
+        description: Internal helper ("." + kafka_domain, or empty).
+        type: str
+      kafka_cluster_group:
+        description: Inventory group whose hosts form the quorum.
+        type: str
+      kafka_cluster_fqdns:
+        description: FQDNs of all quorum members (derived).
+        type: list
+        elements: raw
+      kafka_listen_address:
+        description: Bind address of all listeners; empty means all interfaces.
+        type: str
+      kafka_client_port:
+        description: CLIENT listener (SASL_SSL, SCRAM-SHA-512).
+        type: int
+      kafka_internal_port:
+        description: INTERNAL listener (mTLS), inter-broker and Ansible admin traffic.
+        type: int
+      kafka_controller_port:
+        description: CONTROLLER listener (mTLS), KRaft quorum.
+        type: int
+      kafka_heap:
+        description: JVM heap (-Xms = -Xmx). TEST 4g, PROD 6g.
+        type: str
+      kafka_jvm_performance_opts:
+        description: GC and JVM flags (KAFKA_JVM_PERFORMANCE_OPTS).
+        type: str
+      kafka_opts_extra:
+        description: Extra KAFKA_OPTS appended after the javaagent.
+        type: str
+      kafka_limit_nofile:
+        description: LimitNOFILE of kafka.service.
+        type: int
+      kafka_timeout_stop_sec:
+        description: TimeoutStopSec; time for a controlled shutdown.
+        type: int
+      kafka_jmx_exporter_enabled:
+        description: Load the JMX exporter javaagent (kafka role) / its port and paths (both roles must agree).
+        type: bool
+      kafka_jmx_exporter_port:
+        description: Port of the JMX exporter HTTP endpoint.
+        type: int
+      kafka_jmx_exporter_jar:
+        description: Path of the javaagent jar on the broker.
+        type: str
+      kafka_jmx_exporter_config:
+        description: Path of the exporter rules on the broker.
+        type: str
+      kafka_tls_keystore:
+        description: PKCS12 keystore built by kafka_tls.
+        type: str
+      kafka_tls_truststore:
+        description: PKCS12 truststore built by kafka_tls.
+        type: str
+      kafka_tls_keystore_password:
+        description: Keystore and key password (vault).
+        type: str
+        no_log: true
+      kafka_tls_truststore_password:
+        description: Truststore password (vault).
+        type: str
+        no_log: true
+      kafka_tls_protocols:
+        description: ssl.enabled.protocols.
+        type: str
+      kafka_admin_user:
+        description: SCRAM super user created at format time.
+        type: str
+      kafka_admin_password:
+        description: Its password (vault); 12+ characters, none of , [ ] " = or spaces.
+        type: str
+        no_log: true
+      kafka_super_users:
+        description: super.users; broker certificate CNs plus User:admin (derived).
+        type: list
+        elements: raw
+      kafka_default_replication_factor:
+        description: default.replication.factor.
+        type: int
+      kafka_min_insync_replicas:
+        description: min.insync.replicas.
+        type: int
+      kafka_num_partitions:
+        description: num.partitions for topics created without an explicit count.
+        type: int
+      kafka_log_retention_hours:
+        description: log.retention.hours.
+        type: int
+      kafka_num_network_threads:
+        description: num.network.threads.
+        type: int
+      kafka_num_io_threads:
+        description: num.io.threads.
+        type: int
+      kafka_server_properties_extra:
+        description: Extra server.properties entries, key -> value.
+        type: dict
+      kafka_start_retries:
+        description: Attempts while waiting for the quorum and the brokers after start.
+        type: int
+      kafka_start_delay:
+        description: Seconds between those attempts.
+        type: int
+      kafka_log_level:
+        description: Root and kafka logger level.
+        type: str
+      kafka_log_retention_days:
+        description: Days rolled log files are kept.
+        type: int
+      kafka_log4j_appenders:
+        description: Appender name -> log file base name.
+        type: dict

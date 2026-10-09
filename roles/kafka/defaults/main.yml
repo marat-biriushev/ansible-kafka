@@ -1,0 +1,96 @@
+---
+# Version and distribution. The tarball is taken from the control node only
+# and must be listed in artifacts.yml with the same version.
+kafka_version: "4.3.1"
+kafka_scala_version: "2.13"
+kafka_tarball: "kafka_{{ kafka_scala_version }}-{{ kafka_version }}.tgz"
+kafka_artifacts_dir: "{{ artifacts_dir | default(playbook_dir ~ '/../artifacts') }}"
+kafka_artifacts_manifest: "{{ artifacts_manifest | default(playbook_dir ~ '/../artifacts.yml') }}"
+
+# Service account and layout
+kafka_user: kafka
+kafka_group: kafka
+kafka_install_root: /opt
+# kafka_home is a symlink to the versioned directory
+kafka_home: /opt/kafka
+kafka_install_dir: "{{ kafka_install_root }}/kafka_{{ kafka_scala_version }}-{{ kafka_version }}"
+kafka_conf_dir: /etc/kafka
+kafka_data_dir: /data/kafka
+kafka_log_dir: /var/log/kafka
+
+# Identity. kafka_node_id, kafka_cluster_id and kafka_directory_id have no
+# usable default: the role stops when they are missing.
+kafka_node_id: ""
+kafka_cluster_id: ""
+kafka_directory_id: ""
+kafka_rack: "{{ inventory_hostname | regex_replace('^.*-', '') }}"
+kafka_domain: ""
+kafka_fqdn: "{{ inventory_hostname ~ kafka_domain_suffix }}"
+kafka_domain_suffix: "{{ ('.' ~ kafka_domain) if kafka_domain else '' }}"
+# Inventory group whose hosts form the KRaft quorum
+kafka_cluster_group: kafka
+# FQDNs of all quorum members, in inventory order. Inventory hostnames are
+# short names; the FQDN is the short name plus kafka_domain.
+kafka_cluster_fqdns: "{{ groups[kafka_cluster_group] | map('regex_replace', '$', kafka_domain_suffix) | list }}"
+
+# Listeners. kafka_listen_address empty = all interfaces.
+kafka_listen_address: ""
+kafka_client_port: 9092
+kafka_internal_port: 9091
+kafka_controller_port: 9093
+
+# JVM
+kafka_heap: 4g
+kafka_jvm_performance_opts: >-
+  -server -XX:+UseG1GC -XX:MaxGCPauseMillis=20
+  -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent
+  -XX:MaxInlineLevel=15 -Djava.awt.headless=true
+kafka_opts_extra: ""
+kafka_limit_nofile: 100000
+kafka_timeout_stop_sec: 300
+
+# JMX exporter javaagent. The jar and its config are put in place by the
+# kafka_jmx_exporter role; these must match that role's variables.
+kafka_jmx_exporter_enabled: true
+kafka_jmx_exporter_port: 7071
+kafka_jmx_exporter_jar: /opt/jmx_exporter/jmx_prometheus_javaagent.jar
+kafka_jmx_exporter_config: /etc/kafka/jmx-exporter.yml
+
+# TLS stores, built by the kafka_tls role. Passwords come from the vault.
+kafka_tls_keystore: /etc/kafka/tls/keystore.p12
+kafka_tls_truststore: /etc/kafka/tls/truststore.p12
+kafka_tls_keystore_password: ""
+kafka_tls_truststore_password: ""
+kafka_tls_protocols: TLSv1.3,TLSv1.2
+
+# SCRAM admin, created by kafka-storage format. Super users are the broker
+# certificate CNs (= FQDNs) plus User:admin.
+kafka_admin_user: admin
+kafka_admin_password: ""
+kafka_super_users: >-
+  {{ (kafka_cluster_fqdns | map('regex_replace', '^', 'User:') | list) + ['User:' ~ kafka_admin_user] }}
+
+# Broker settings
+kafka_default_replication_factor: 3
+kafka_min_insync_replicas: 2
+kafka_num_partitions: 3
+kafka_log_retention_hours: 168
+kafka_num_network_threads: 3
+kafka_num_io_threads: 8
+# Extra server.properties lines, key: value
+kafka_server_properties_extra: {}
+
+# Waiting for the cluster after the first start
+kafka_start_retries: 60
+kafka_start_delay: 5
+
+# Logging (log4j2)
+kafka_log_level: INFO
+kafka_log_retention_days: 14
+kafka_log4j_appenders:
+  KafkaAppender: server
+  StateChangeAppender: state-change
+  RequestAppender: kafka-request
+  CleanerAppender: log-cleaner
+  ControllerAppender: controller
+  AuthorizerAppender: kafka-authorizer

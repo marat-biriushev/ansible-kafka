@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: ipotekabank DevOps
+  description: jmx_prometheus_javaagent jar and rules for the Kafka brokers
+  license: proprietary
+  min_ansible_version: "2.16"
+  platforms:
+    - name: EL
+      versions:
+        - "10"
+dependencies: []

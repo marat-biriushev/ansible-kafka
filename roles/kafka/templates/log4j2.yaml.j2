@@ -1,0 +1,82 @@
+# {{ ansible_managed }}
+# Same loggers as the stock config/log4j2.yaml; files roll daily and are
+# deleted after kafka_log_retention_days. kafka-authorizer.log is the file
+# to ship to the SIEM.
+Configuration:
+  Properties:
+    Property:
+      - name: "kafka.logs.dir"
+        value: "{{ kafka_log_dir }}"
+      - name: "logPattern"
+        value: "[%d] %p %m (%c)%n"
+
+  Appenders:
+    RollingFile:
+{% for appender, file in kafka_log4j_appenders.items() %}
+      - name: {{ appender }}
+        fileName: "${sys:kafka.logs.dir}/{{ file }}.log"
+        filePattern: "${sys:kafka.logs.dir}/{{ file }}.log.%d{yyyy-MM-dd}"
+        PatternLayout:
+          pattern: "${logPattern}"
+        TimeBasedTriggeringPolicy:
+          modulate: true
+          interval: 1
+        DefaultRolloverStrategy:
+          Delete:
+            basePath: "${sys:kafka.logs.dir}"
+            IfFileName:
+              glob: "{{ file }}.log.*"
+            IfLastModified:
+              age: "{{ kafka_log_retention_days }}d"
+{% endfor %}
+
+  Loggers:
+    Root:
+      level: {{ kafka_log_level }}
+      AppenderRef:
+        - ref: KafkaAppender
+    Logger:
+      - name: kafka
+        level: {{ kafka_log_level }}
+      - name: org.apache.kafka
+        level: {{ kafka_log_level }}
+      - name: kafka.request.logger
+        level: WARN
+        additivity: false
+        AppenderRef:
+          ref: RequestAppender
+      - name: kafka.network.RequestChannel$
+        level: WARN
+        additivity: false
+        AppenderRef:
+          ref: RequestAppender
+      - name: org.apache.kafka.controller
+        level: INFO
+        additivity: false
+        AppenderRef:
+          ref: ControllerAppender
+      - name: org.apache.kafka.storage.internals.log.LogCleaner
+        level: INFO
+        additivity: false
+        AppenderRef:
+          ref: CleanerAppender
+      - name: org.apache.kafka.storage.internals.log.LogCleaner$CleanerThread
+        level: INFO
+        additivity: false
+        AppenderRef:
+          ref: CleanerAppender
+      - name: org.apache.kafka.storage.internals.log.Cleaner
+        level: INFO
+        additivity: false
+        AppenderRef:
+          ref: CleanerAppender
+      - name: state.change.logger
+        level: INFO
+        additivity: false
+        AppenderRef:
+          ref: StateChangeAppender
+      - name: kafka.authorizer.logger
+        level: INFO
+        additivity: false
+        AppenderRef:
+          ref: AuthorizerAppender

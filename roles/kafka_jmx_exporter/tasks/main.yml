@@ -1,0 +1,65 @@
+---
+- name: Read the artifacts manifest
+  ansible.builtin.set_fact:
+    kafka_jmx_exporter_manifest_entry: >-
+      {{ (lookup('ansible.builtin.file', kafka_jmx_exporter_artifacts_manifest) | from_yaml).artifacts
+         | selectattr('file', 'equalto', kafka_jmx_exporter_file) | first | default({}) }}
+  run_once: true
+
+- name: Look for the javaagent jar in artifacts/
+  ansible.builtin.stat:
+    path: "{{ kafka_jmx_exporter_artifacts_dir }}/{{ kafka_jmx_exporter_file }}"
+    checksum_algorithm: sha256
+  register: kafka_jmx_exporter_jar_stat
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Fail if the jar is missing, corrupt or not pinned
+  ansible.builtin.assert:
+    that:
+      - kafka_jmx_exporter_manifest_entry.sha256 | default('') | length == 64
+      - kafka_jmx_exporter_jar_stat.stat.exists
+      - kafka_jmx_exporter_jar_stat.stat.checksum == kafka_jmx_exporter_manifest_entry.sha256 | lower
+    fail_msg: >-
+      Put {{ kafka_jmx_exporter_file }} in artifacts/ (pinned with a sha256 in artifacts.yml),
+      see README "Offline artifacts".
+    quiet: true
+  run_once: true
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+
+- name: Create the jmx_exporter directory
+  ansible.builtin.file:
+    path: "{{ kafka_jmx_exporter_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create the config directory
+  ansible.builtin.file:
+    path: "{{ kafka_jmx_exporter_config | dirname }}"
+    state: directory
+    owner: root
+    group: "{{ kafka_jmx_exporter_group }}"
+    mode: "0750"
+
+- name: Copy the javaagent jar
+  ansible.builtin.copy:
+    src: "{{ kafka_jmx_exporter_artifacts_dir }}/{{ kafka_jmx_exporter_file }}"
+    dest: "{{ kafka_jmx_exporter_jar }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Kafka restart required
+
+- name: Deploy the exporter rules
+  ansible.builtin.template:
+    src: jmx-exporter.yml.j2
+    dest: "{{ kafka_jmx_exporter_config }}"
+    owner: root
+    group: "{{ kafka_jmx_exporter_group }}"
+    mode: "0640"
+  notify: Kafka restart required

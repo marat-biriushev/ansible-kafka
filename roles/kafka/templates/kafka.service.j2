@@ -1,0 +1,21 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Apache Kafka {{ kafka_version }} (KRaft, broker+controller)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ kafka_user }}
+Group={{ kafka_group }}
+EnvironmentFile={{ kafka_conf_dir }}/kafka.env
+ExecStart={{ kafka_home }}/bin/kafka-server-start.sh {{ kafka_conf_dir }}/server.properties
+LimitNOFILE={{ kafka_limit_nofile }}
+# SIGTERM triggers a controlled shutdown; leadership moves off first
+TimeoutStopSec={{ kafka_timeout_stop_sec }}
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

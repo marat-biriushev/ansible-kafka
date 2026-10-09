@@ -1,0 +1,44 @@
+---
+# Runs on the control node: the tarball must be in artifacts/ and match the
+# checksum pinned in artifacts.yml. Nothing is downloaded.
+- name: Read the artifacts manifest
+  ansible.builtin.set_fact:
+    kafka_manifest_entry: >-
+      {{ (lookup('ansible.builtin.file', kafka_artifacts_manifest) | from_yaml).artifacts
+         | selectattr('file', 'equalto', kafka_tarball) | first | default({}) }}
+  delegate_to: localhost
+  run_once: true
+
+- name: Check that artifacts.yml pins this Kafka version
+  ansible.builtin.assert:
+    that:
+      - kafka_manifest_entry.version | default('') == kafka_version
+      - kafka_manifest_entry.sha512 | default('') | length == 128
+    fail_msg: >-
+      artifacts.yml has no entry for {{ kafka_tarball }} with version {{ kafka_version }} and a sha512.
+      Keep kafka_version and artifacts.yml in sync.
+    quiet: true
+  delegate_to: localhost
+  run_once: true
+
+- name: Look for the Kafka tarball in artifacts/
+  ansible.builtin.stat:
+    path: "{{ kafka_artifacts_dir }}/{{ kafka_tarball }}"
+    checksum_algorithm: sha512
+  register: kafka_tarball_stat
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Fail if the tarball is missing or corrupt
+  ansible.builtin.assert:
+    that:
+      - kafka_tarball_stat.stat.exists
+      - kafka_tarball_stat.stat.checksum == kafka_manifest_entry.sha512 | lower
+    fail_msg: >-
+      {{ 'Put ' ~ kafka_tarball ~ ' in artifacts/, see README "Offline artifacts".'
+         if not kafka_tarball_stat.stat.exists else
+         kafka_artifacts_dir ~ '/' ~ kafka_tarball ~ ' does not match the sha512 in artifacts.yml.' }}
+    quiet: true
+  delegate_to: localhost
+  run_once: true

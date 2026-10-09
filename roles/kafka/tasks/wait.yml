@@ -1,0 +1,43 @@
+---
+# All nodes are started in the same task above, so the quorum can form.
+- name: Wait for the INTERNAL listener
+  ansible.builtin.wait_for:
+    host: "{{ kafka_listen_address | default('127.0.0.1', true) }}"
+    port: "{{ kafka_internal_port }}"
+    timeout: "{{ kafka_start_retries * kafka_start_delay }}"
+
+- name: Wait until every controller has joined the quorum
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_home }}/bin/kafka-metadata-quorum.sh"
+      - --bootstrap-server
+      - "{{ kafka_fqdn }}:{{ kafka_internal_port }}"
+      - --command-config
+      - "{{ kafka_conf_dir }}/admin.properties"
+      - describe
+      - --status
+  register: kafka_quorum_status
+  changed_when: false
+  until: >-
+    kafka_quorum_status.rc == 0
+    and (kafka_quorum_status.stdout | regex_search('(?m)^CurrentVoters:.*$') | default('', true)
+         | regex_findall('"id":\s*\d+') | length) == groups[kafka_cluster_group] | length
+  retries: "{{ kafka_start_retries }}"
+  delay: "{{ kafka_start_delay }}"
+  run_once: true
+
+- name: Wait until this broker answers API requests
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_home }}/bin/kafka-broker-api-versions.sh"
+      - --bootstrap-server
+      - "{{ kafka_fqdn }}:{{ kafka_internal_port }}"
+      - --command-config
+      - "{{ kafka_conf_dir }}/admin.properties"
+  register: kafka_api_versions
+  changed_when: false
+  until: >-
+    kafka_api_versions.rc == 0
+    and kafka_api_versions.stdout is search('\(id: ' ~ kafka_node_id ~ ' ')
+  retries: "{{ kafka_start_retries }}"
+  delay: "{{ kafka_start_delay }}"

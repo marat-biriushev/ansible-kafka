@@ -1,0 +1,108 @@
+# {{ ansible_managed }}
+# Rules for jmx_prometheus_javaagent {{ kafka_jmx_exporter_version }} on a combined
+# broker+controller. The metric names below are the ones monitoring/kafka-alerts.yml uses.
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+includeObjectNames:
+  - "kafka.server:*"
+  - "kafka.controller:*"
+  - "kafka.network:*"
+  - "kafka.log:*"
+  - "java.lang:*"
+excludeObjectNames:
+  # One series per partition and client; too many for the TSDB
+  - "kafka.log:type=Log,name=LogStartOffset,*"
+  - "kafka.log:type=Log,name=LogEndOffset,*"
+  - "kafka.server:type=FetcherLagMetrics,*"
+rules:
+  # KRaft quorum: kafka.server:type=raft-metrics, attributes like current-leader
+  - pattern: "kafka.server<type=raft-metrics><>([a-z-]+): (.*)"
+    name: kafka_server_raft_metrics_$1
+    type: GAUGE
+
+  # Meters / rates with topic: kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec,topic=x
+  - pattern: "kafka.server<type=(.+), name=(.+)PerSec\\w*, topic=(.+)><>Count"
+    name: kafka_server_$1_$2_total
+    type: COUNTER
+    labels:
+      topic: "$3"
+  - pattern: "kafka.server<type=(.+), name=(.+)PerSec\\w*><>Count"
+    name: kafka_server_$1_$2_total
+    type: COUNTER
+
+  # Gauges with topic/partition labels (UnderReplicated per partition etc.)
+  - pattern: "kafka.server<type=(.+), name=(.+), clientId=(.+), topic=(.+), partition=(.*)><>Value"
+    name: kafka_server_$1_$2
+    type: GAUGE
+    labels:
+      clientid: "$3"
+      topic: "$4"
+      partition: "$5"
+  - pattern: "kafka.server<type=(.+), name=(.+), clientId=(.+), brokerHost=(.+), brokerPort=(.+)><>Value"
+    name: kafka_server_$1_$2
+    type: GAUGE
+    labels:
+      clientid: "$3"
+      broker: "$4:$5"
+
+  # KafkaRequestHandlerPool RequestHandlerAvgIdlePercent is a meter; the
+  # one-minute rate is the idle ratio 0..1
+  - pattern: "kafka.server<type=KafkaRequestHandlerPool, name=RequestHandlerAvgIdlePercent><>OneMinuteRate"
+    name: kafka_server_kafkarequesthandlerpool_requesthandleravgidlepercent
+    type: GAUGE
+
+  # Plain gauges: kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions etc.
+  - pattern: "kafka.server<type=(.+), name=(.+)><>Value"
+    name: kafka_server_$1_$2
+    type: GAUGE
+
+  # Controller: OfflinePartitionsCount, ActiveControllerCount, FencedBrokerCount...
+  - pattern: "kafka.controller<type=(.+), name=(.+)><>Value"
+    name: kafka_controller_$1_$2
+    type: GAUGE
+
+  # Network: request rates and latencies per request type
+  - pattern: "kafka.network<type=RequestMetrics, name=RequestsPerSec, request=(.+), version=(.+)><>Count"
+    name: kafka_network_requestmetrics_requests_total
+    type: COUNTER
+    labels:
+      request: "$1"
+      version: "$2"
+  - pattern: "kafka.network<type=RequestMetrics, name=(.+)TimeMs, request=(.+)><>(\\d+)thPercentile"
+    name: kafka_network_requestmetrics_$1_time_ms
+    type: GAUGE
+    labels:
+      request: "$2"
+      quantile: "0.$3"
+  - pattern: "kafka.network<type=(.+), name=(.+)><>Value"
+    name: kafka_network_$1_$2
+    type: GAUGE
+
+  # Log: per-partition size, and log flush rate
+  - pattern: "kafka.log<type=Log, name=Size, topic=(.+), partition=(.+)><>Value"
+    name: kafka_log_log_size_bytes
+    type: GAUGE
+    labels:
+      topic: "$1"
+      partition: "$2"
+  - pattern: "kafka.log<type=LogFlushStats, name=LogFlushRateAndTimeMs><>Count"
+    name: kafka_log_flushes_total
+    type: COUNTER
+  - pattern: "kafka.log<type=(.+), name=(.+)><>Value"
+    name: kafka_log_$1_$2
+    type: GAUGE
+
+  # JVM
+  - pattern: "java.lang<type=Memory><HeapMemoryUsage>(used|max|committed)"
+    name: jvm_memory_heap_$1_bytes
+    type: GAUGE
+  - pattern: "java.lang<type=GarbageCollector, name=(.+)><>CollectionCount"
+    name: jvm_gc_collections_total
+    type: COUNTER
+    labels:
+      gc: "$1"
+  - pattern: "java.lang<type=GarbageCollector, name=(.+)><>CollectionTime"
+    name: jvm_gc_collection_milliseconds_total
+    type: COUNTER
+    labels:
+      gc: "$1"

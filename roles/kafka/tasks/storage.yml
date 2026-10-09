@@ -1,0 +1,68 @@
+---
+# The storage is formatted exactly once, when meta.properties does not
+# exist. There is deliberately no option to reformat.
+- name: Look for meta.properties
+  ansible.builtin.stat:
+    path: "{{ kafka_data_dir }}/meta.properties"
+  register: kafka_meta_stat
+
+- name: Read meta.properties
+  ansible.builtin.slurp:
+    src: "{{ kafka_data_dir }}/meta.properties"
+  register: kafka_meta_raw
+  when: kafka_meta_stat.stat.exists
+
+- name: Check that the existing storage belongs to this cluster and node
+  ansible.builtin.assert:
+    that:
+      - _meta['cluster.id'] | default('') == kafka_cluster_id
+      - _meta['node.id'] | default('') == kafka_node_id | string
+      - _meta['directory.id'] | default('') == kafka_directory_id
+    fail_msg: >-
+      {{ kafka_data_dir }}/meta.properties says cluster.id={{ _meta['cluster.id'] | default('?') }},
+      node.id={{ _meta['node.id'] | default('?') }}, directory.id={{ _meta['directory.id'] | default('?') }};
+      the inventory says {{ kafka_cluster_id }}, {{ kafka_node_id }}, {{ kafka_directory_id }}.
+      The inventory is wrong or the disk belongs to another cluster. The role never reformats:
+      fix the inventory, or clear {{ kafka_data_dir }} by hand if the data is really disposable.
+    quiet: true
+  vars:
+    _meta: >-
+      {{ dict(kafka_meta_raw.content | b64decode | regex_findall('(?m)^([a-z.]+)=(.*)$')) }}
+  when: kafka_meta_stat.stat.exists
+
+- name: Format the storage
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_home }}/bin/kafka-storage.sh"
+      - format
+      - --cluster-id
+      - "{{ kafka_cluster_id }}"
+      - --config
+      - "{{ kafka_conf_dir }}/server.properties"
+      - --initial-controllers
+      - "{{ _initial_controllers }}"
+      - --add-scram
+      - "SCRAM-SHA-512=[name={{ kafka_admin_user }},password={{ kafka_admin_password }}]"
+    creates: "{{ kafka_data_dir }}/meta.properties"
+  vars:
+    # The same string on every node: id@host:port:directory-id for each voter
+    _initial_controllers: >-
+      {% for h in groups[kafka_cluster_group] -%}
+      {{ hostvars[h].kafka_node_id }}@{{ kafka_cluster_fqdns[loop.index0] }}:{{ kafka_controller_port }}
+      {{- ':' ~ hostvars[h].kafka_directory_id ~ (',' if not loop.last else '') }}
+      {%- endfor %}
+  environment:
+    KAFKA_LOG4J_OPTS: "-Dlog4j2.configurationFile={{ kafka_home }}/config/tools-log4j2.yaml"
+  register: kafka_format
+  no_log: true
+  when: not kafka_meta_stat.stat.exists
+
+# Must happen right here, before the first start, so not a handler
+- name: Hand the formatted storage to the kafka user  # noqa: no-handler
+  ansible.builtin.file:
+    path: "{{ kafka_data_dir }}"
+    state: directory
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    recurse: true
+  when: kafka_format is changed
