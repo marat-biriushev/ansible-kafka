@@ -1,0 +1,52 @@
+---
+- name: Check the Kafka UI settings
+  ansible.builtin.assert:
+    that:
+      - kafka_ui_bootstrap_servers | length > 0
+      - kafka_ui_auth_type in ['LOGIN_FORM', 'OAUTH2', 'LDAP']
+      - kafka_ui_kafka_password | length >= 12
+      - kafka_ui_kafka_password is not search('[\s"$#\\]')
+      - kafka_ui_auth_type != 'LOGIN_FORM' or kafka_ui_login_password | length >= 12
+      - kafka_ui_login_password is not search('[\s$#]')
+    fail_msg: >-
+      kafka_ui_bootstrap_servers must be set; kafka_ui_auth_type is LOGIN_FORM, OAUTH2 or LDAP;
+      kafka_ui_kafka_password (and kafka_ui_login_password for LOGIN_FORM) come from the vault,
+      12+ characters, no spaces, quotes, $, # or backslashes.
+    quiet: true
+  no_log: true
+
+- name: Create the project directory
+  ansible.builtin.file:
+    path: "{{ kafka_ui_project_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Deploy the secrets
+  ansible.builtin.template:
+    src: secrets.env.j2
+    dest: "{{ kafka_ui_project_dir }}/secrets.env"
+    owner: root
+    group: root
+    mode: "0600"
+  register: kafka_ui_secrets
+  no_log: true
+
+- name: Deploy compose.yml
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ kafka_ui_project_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start Kafka UI
+  community.docker.docker_compose_v2:
+    project_src: "{{ kafka_ui_project_dir }}"
+    state: present
+    pull: missing
+    # Compose does not always notice a changed env_file
+    recreate: "{{ 'always' if kafka_ui_secrets is changed else 'auto' }}"
+    wait: true
+    wait_timeout: 300

@@ -1,0 +1,38 @@
+# {{ ansible_managed }}
+name: kafka-ui
+services:
+  kafka-ui:
+    image: "{{ kafka_ui_image }}"
+    container_name: kafka-ui
+    restart: unless-stopped
+    ports:
+      - "{{ kafka_ui_port }}:8080"
+    env_file:
+      - secrets.env
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "{{ kafka_ui_cluster_name }}"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "{{ kafka_ui_bootstrap_servers | join(',') }}"
+      KAFKA_CLUSTERS_0_READONLY: "{{ kafka_ui_readonly | lower }}"
+      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: SASL_SSL
+      KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM: SCRAM-SHA-512
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_TYPE: PEM
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_LOCATION: /etc/kafka-ca/ca.pem
+{% if kafka_ui_schema_registry_url %}
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: "{{ kafka_ui_schema_registry_url }}"
+{% endif %}
+      AUTH_TYPE: "{{ kafka_ui_auth_type }}"
+{% if kafka_ui_auth_type == 'LOGIN_FORM' %}
+      SPRING_SECURITY_USER_NAME: "{{ kafka_ui_login_user }}"
+{% endif %}
+      DYNAMIC_CONFIG_ENABLED: "false"
+{% for key, value in kafka_ui_env_extra | dictsort %}
+      {{ key }}: "{{ value }}"
+{% endfor %}
+    volumes:
+      - "{{ kafka_ui_ca_file }}:/etc/kafka-ca/ca.pem:ro"
+    healthcheck:
+      test: {{ kafka_ui_healthcheck | to_json }}
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s

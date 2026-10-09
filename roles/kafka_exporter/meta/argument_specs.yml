@@ -1,0 +1,40 @@
+---
+# Generated from defaults/main.yml; keep the two in sync.
+argument_specs:
+  main:
+    short_description: kafka-exporter (consumer lag metrics) in Docker (compose)
+    options:
+      kafka_exporter_image:
+        description: Image reference (Nexus mirror).
+        type: str
+      kafka_exporter_project_dir:
+        description: Compose project directory.
+        type: str
+      kafka_exporter_port:
+        description: Published metrics port.
+        type: int
+      kafka_exporter_bootstrap_servers:
+        description: Broker host:port list (CLIENT listener).
+        type: list
+        elements: raw
+      kafka_exporter_kafka_user:
+        description: SCRAM account.
+        type: str
+      kafka_exporter_kafka_password:
+        description: Its password (vault).
+        type: str
+        no_log: true
+      kafka_exporter_ca_file:
+        description: CA file on the host, mounted read-only.
+        type: str
+      kafka_exporter_kafka_version:
+        description: Protocol version for sarama; Kafka 4 needs 2.1+.
+        type: str
+      kafka_exporter_args_extra:
+        description: Extra command-line flags.
+        type: list
+        elements: raw
+      kafka_exporter_healthcheck:
+        description: Docker healthcheck test.
+        type: list
+        elements: raw

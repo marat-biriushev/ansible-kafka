@@ -1,0 +1,44 @@
+# {{ ansible_managed }}
+name: schema-registry
+services:
+  schema-registry:
+    image: "{{ schema_registry_image }}"
+    container_name: schema-registry
+    hostname: schema-registry
+    restart: unless-stopped
+    ports:
+      - "{{ schema_registry_port }}:8081"
+{% if schema_registry_jmx_exporter_enabled %}
+      - "{{ schema_registry_jmx_exporter_port }}:7071"
+{% endif %}
+    env_file:
+      - secrets.env
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: "{{ schema_registry_host_name }}"
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "{{ schema_registry_bootstrap_servers | map('regex_replace', '^', 'SASL_SSL://') | join(',') }}"
+      SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL: SASL_SSL
+      SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM: SCRAM-SHA-512
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_TRUSTSTORE_TYPE: PEM
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_TRUSTSTORE_LOCATION: /etc/kafka-ca/ca.pem
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC: "{{ schema_registry_topic }}"
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: "3"
+      SCHEMA_REGISTRY_SCHEMA_REGISTRY_GROUP_ID: "{{ schema_registry_group_id }}"
+      SCHEMA_REGISTRY_HEAP_OPTS: "-Xms{{ schema_registry_heap }} -Xmx{{ schema_registry_heap }}"
+{% if schema_registry_jmx_exporter_enabled %}
+      SCHEMA_REGISTRY_OPTS: "-javaagent:/opt/jmx/jmx_prometheus_javaagent.jar=7071:/opt/jmx/jmx-exporter.yml"
+{% endif %}
+{% for key, value in schema_registry_env_extra | dictsort %}
+      {{ key }}: "{{ value }}"
+{% endfor %}
+    volumes:
+      - "{{ schema_registry_ca_file }}:/etc/kafka-ca/ca.pem:ro"
+{% if schema_registry_jmx_exporter_enabled %}
+      - "{{ schema_registry_project_dir }}/jmx:/opt/jmx:ro"
+{% endif %}
+    healthcheck:
+      test: {{ schema_registry_healthcheck | to_json }}
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s

@@ -1,0 +1,58 @@
+---
+# Generated from defaults/main.yml; keep the two in sync.
+argument_specs:
+  main:
+    short_description: Kafka UI (kafbat) in Docker (compose), read-only
+    options:
+      kafka_ui_image:
+        description: Image reference (Nexus mirror).
+        type: str
+      kafka_ui_project_dir:
+        description: Compose project directory.
+        type: str
+      kafka_ui_port:
+        description: Published HTTP port.
+        type: int
+      kafka_ui_cluster_name:
+        description: Cluster name shown in the UI.
+        type: str
+      kafka_ui_bootstrap_servers:
+        description: Broker host:port list (CLIENT listener).
+        type: list
+        elements: raw
+      kafka_ui_kafka_user:
+        description: SCRAM account (read-only ACLs).
+        type: str
+      kafka_ui_kafka_password:
+        description: Its password (vault).
+        type: str
+        no_log: true
+      kafka_ui_ca_file:
+        description: CA file on the host, mounted read-only.
+        type: str
+      kafka_ui_readonly:
+        description: Read-only mode in the UI.
+        type: bool
+      kafka_ui_schema_registry_url:
+        description: Schema Registry URL; empty hides it.
+        type: str
+      kafka_ui_auth_type:
+        description: LOGIN_FORM, OAUTH2 or LDAP.
+        type: str
+      kafka_ui_login_user:
+        description: LOGIN_FORM user.
+        type: str
+      kafka_ui_login_password:
+        description: LOGIN_FORM password (vault).
+        type: str
+        no_log: true
+      kafka_ui_auth_env:
+        description: Spring settings for OAUTH2/LDAP; written to the 0600 env file.
+        type: dict
+      kafka_ui_healthcheck:
+        description: Docker healthcheck test.
+        type: list
+        elements: raw
+      kafka_ui_env_extra:
+        description: Extra environment variables.
+        type: dict

@@ -1,0 +1,90 @@
+---
+- name: Check the Schema Registry settings
+  ansible.builtin.assert:
+    that:
+      - schema_registry_bootstrap_servers | length > 0
+      - schema_registry_kafka_password | length >= 12
+      # Goes into an env file and a JAAS string
+      - schema_registry_kafka_password is not search('[\s"$#\\]')
+    fail_msg: >-
+      schema_registry_bootstrap_servers must be set and schema_registry_kafka_password must come from
+      the vault (12+ characters, no spaces, quotes, $, # or backslashes).
+    quiet: true
+  no_log: true
+
+- name: Check the javaagent jar on the control node
+  ansible.builtin.stat:
+    path: "{{ schema_registry_artifacts_dir }}/{{ schema_registry_jmx_exporter_file }}"
+  register: schema_registry_jar_stat
+  delegate_to: localhost
+  become: false
+  when: schema_registry_jmx_exporter_enabled
+
+- name: Fail if the jar is missing
+  ansible.builtin.assert:
+    that: schema_registry_jar_stat.stat.exists
+    fail_msg: Put {{ schema_registry_jmx_exporter_file }} in artifacts/, see README "Offline artifacts".
+    quiet: true
+  when: schema_registry_jmx_exporter_enabled
+
+- name: Create the project directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ schema_registry_project_dir }}", mode: "0750" }
+    # Read by the container user (appuser) through a read-only bind mount
+    - { path: "{{ schema_registry_project_dir }}/jmx", mode: "0755" }
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Copy the javaagent jar
+  ansible.builtin.copy:
+    src: "{{ schema_registry_artifacts_dir }}/{{ schema_registry_jmx_exporter_file }}"
+    dest: "{{ schema_registry_project_dir }}/jmx/jmx_prometheus_javaagent.jar"
+    owner: root
+    group: root
+    mode: "0644"
+  when: schema_registry_jmx_exporter_enabled
+  notify: Restart schema-registry
+
+- name: Deploy the exporter rules
+  ansible.builtin.template:
+    src: jmx-exporter.yml.j2
+    dest: "{{ schema_registry_project_dir }}/jmx/jmx-exporter.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  when: schema_registry_jmx_exporter_enabled
+  notify: Restart schema-registry
+
+- name: Deploy the secrets
+  ansible.builtin.template:
+    src: secrets.env.j2
+    dest: "{{ schema_registry_project_dir }}/secrets.env"
+    owner: root
+    group: root
+    mode: "0600"
+  register: schema_registry_secrets
+  no_log: true
+
+- name: Deploy compose.yml
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ schema_registry_project_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start Schema Registry
+  community.docker.docker_compose_v2:
+    project_src: "{{ schema_registry_project_dir }}"
+    state: present
+    pull: missing
+    # Compose does not always notice a changed env_file
+    recreate: "{{ 'always' if schema_registry_secrets is changed else 'auto' }}"
+    wait: true
+    wait_timeout: 300

@@ -1,0 +1,48 @@
+---
+- name: Check the kafka-exporter settings
+  ansible.builtin.assert:
+    that:
+      - kafka_exporter_bootstrap_servers | length > 0
+      - kafka_exporter_kafka_password | length >= 12
+      - kafka_exporter_kafka_password is not search('[\s"$#\\`]')
+    fail_msg: >-
+      kafka_exporter_bootstrap_servers must be set and kafka_exporter_kafka_password must come from
+      the vault (12+ characters, no spaces, quotes, $, #, backticks or backslashes).
+    quiet: true
+  no_log: true
+
+- name: Create the project directory
+  ansible.builtin.file:
+    path: "{{ kafka_exporter_project_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Deploy the secrets
+  ansible.builtin.template:
+    src: secrets.env.j2
+    dest: "{{ kafka_exporter_project_dir }}/secrets.env"
+    owner: root
+    group: root
+    mode: "0600"
+  register: kafka_exporter_secrets
+  no_log: true
+
+- name: Deploy compose.yml
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ kafka_exporter_project_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start kafka-exporter
+  community.docker.docker_compose_v2:
+    project_src: "{{ kafka_exporter_project_dir }}"
+    state: present
+    pull: missing
+    # Compose does not always notice a changed env_file
+    recreate: "{{ 'always' if kafka_exporter_secrets is changed else 'auto' }}"
+    wait: true
+    wait_timeout: 300

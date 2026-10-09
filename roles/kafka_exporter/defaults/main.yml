@@ -1,0 +1,15 @@
+---
+kafka_exporter_image: "{{ container_registry | default('docker.io') }}/danielqsj/kafka-exporter:v1.10.0"
+kafka_exporter_project_dir: /opt/kafka-exporter
+kafka_exporter_port: 9308
+
+kafka_exporter_bootstrap_servers: "{{ kafka_bootstrap_servers }}"
+kafka_exporter_kafka_user: kafka-exporter
+kafka_exporter_kafka_password: ""
+kafka_exporter_ca_file: /etc/kafka-services/ca.pem
+# Protocol version sarama speaks. Kafka 4.x dropped the pre-2.1 request
+# versions, so the exporter's default (2.0.0) does not work.
+kafka_exporter_kafka_version: "3.9.0"
+kafka_exporter_args_extra: []
+
+kafka_exporter_healthcheck: ["CMD", "wget", "-q", "--spider", "http://localhost:9308/healthz"]

@@ -1,0 +1,38 @@
+# {{ ansible_managed }}
+name: kafka-exporter
+services:
+  kafka-exporter:
+    image: "{{ kafka_exporter_image }}"
+    container_name: kafka-exporter
+    restart: unless-stopped
+    ports:
+      - "{{ kafka_exporter_port }}:9308"
+    env_file:
+      - secrets.env
+    # The exporter takes the password only as a flag. A shell reads it from
+    # the environment so that it stays out of this file; $$ is a literal $.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        exec /bin/kafka_exporter
+{% for server in kafka_exporter_bootstrap_servers %}
+        --kafka.server={{ server }}
+{% endfor %}
+        --kafka.version={{ kafka_exporter_kafka_version }}
+        --sasl.enabled
+        --sasl.mechanism=scram-sha512
+        --sasl.username={{ kafka_exporter_kafka_user }}
+        --sasl.password="$$KAFKA_EXPORTER_SASL_PASSWORD"
+        --tls.enabled
+        --tls.ca-file=/etc/kafka-ca/ca.pem
+{% for arg in kafka_exporter_args_extra %}
+        {{ arg }}
+{% endfor %}
+    volumes:
+      - "{{ kafka_exporter_ca_file }}:/etc/kafka-ca/ca.pem:ro"
+    healthcheck:
+      test: {{ kafka_exporter_healthcheck | to_json }}
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s

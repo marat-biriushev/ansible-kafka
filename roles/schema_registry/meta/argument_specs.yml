@@ -1,0 +1,60 @@
+---
+# Generated from defaults/main.yml; keep the two in sync.
+argument_specs:
+  main:
+    short_description: Schema Registry in Docker (compose), SASL_SSL to Kafka
+    options:
+      schema_registry_image:
+        description: Image reference (Nexus mirror).
+        type: str
+      schema_registry_project_dir:
+        description: Compose project directory.
+        type: str
+      schema_registry_port:
+        description: Published REST port.
+        type: int
+      schema_registry_host_name:
+        description: SCHEMA_REGISTRY_HOST_NAME.
+        type: str
+      schema_registry_bootstrap_servers:
+        description: Broker host:port list (CLIENT listener).
+        type: list
+        elements: raw
+      schema_registry_kafka_user:
+        description: SCRAM account.
+        type: str
+      schema_registry_kafka_password:
+        description: Its password (vault).
+        type: str
+        no_log: true
+      schema_registry_ca_file:
+        description: CA file on the host, mounted read-only.
+        type: str
+      schema_registry_topic:
+        description: Storage topic.
+        type: str
+      schema_registry_group_id:
+        description: Group used for leader election.
+        type: str
+      schema_registry_jmx_exporter_enabled:
+        description: Run the JMX exporter javaagent in the container.
+        type: bool
+      schema_registry_jmx_exporter_port:
+        description: Published JMX exporter port.
+        type: int
+      schema_registry_jmx_exporter_file:
+        description: Jar file name in artifacts/.
+        type: str
+      schema_registry_artifacts_dir:
+        description: Directory with the offline artifacts on the control node.
+        type: str
+      schema_registry_heap:
+        description: JVM heap.
+        type: str
+      schema_registry_healthcheck:
+        description: Docker healthcheck test.
+        type: list
+        elements: raw
+      schema_registry_env_extra:
+        description: Extra environment variables.
+        type: dict

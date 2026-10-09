@@ -1,0 +1,28 @@
+---
+# Image from the internal registry mirror (Nexus docker-proxy). The license
+# of the Confluent image is an open question, hence a variable: Apicurio or
+# Karapace can replace it.
+schema_registry_image: "{{ container_registry | default('docker.io') }}/confluentinc/cp-schema-registry:8.3.2"
+schema_registry_project_dir: /opt/schema-registry
+schema_registry_port: 8081
+schema_registry_host_name: "{{ inventory_hostname ~ (('.' ~ kafka_domain) if kafka_domain | default('') else '') }}"
+
+# Kafka connection: CLIENT listener, SCRAM-SHA-512 over TLS
+schema_registry_bootstrap_servers: "{{ kafka_bootstrap_servers }}"
+schema_registry_kafka_user: schema-registry
+schema_registry_kafka_password: ""
+schema_registry_ca_file: /etc/kafka-services/ca.pem
+schema_registry_topic: _schemas
+schema_registry_group_id: schema-registry
+
+# JMX exporter javaagent inside the container, for the schema-registry
+# scrape job. The jar comes from artifacts/ like on the brokers.
+schema_registry_jmx_exporter_enabled: true
+schema_registry_jmx_exporter_port: 7071
+schema_registry_jmx_exporter_file: jmx_prometheus_javaagent-1.7.0.jar
+schema_registry_artifacts_dir: "{{ artifacts_dir | default(playbook_dir ~ '/../artifacts') }}"
+
+schema_registry_heap: 512m
+schema_registry_healthcheck: ["CMD", "curl", "-fsS", "http://localhost:8081/subjects"]
+# Extra environment, e.g. {SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: full}
+schema_registry_env_extra: {}

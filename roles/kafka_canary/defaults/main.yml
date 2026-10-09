@@ -1,0 +1,23 @@
+---
+# Strimzi canary: produces and consumes a small message stream on its own
+# topic and exports end-to-end latency and error metrics. The upstream
+# project is archived (Strimzi proposal 086): it still works, but gets no
+# fixes; check the pinned tag before rollout.
+kafka_canary_enabled: true
+# Published on quay.io only (not on Docker Hub), so the Docker Hub proxy in
+# Nexus does not have it. Point this at a Nexus repository that proxies
+# quay.io, or set kafka_canary_enabled: false.
+kafka_canary_image: quay.io/strimzi/canary:0.11.0
+kafka_canary_project_dir: /opt/kafka-canary
+kafka_canary_port: 8082
+
+kafka_canary_bootstrap_servers: "{{ kafka_bootstrap_servers }}"
+kafka_canary_kafka_user: canary
+kafka_canary_kafka_password: ""
+kafka_canary_ca_file: /etc/kafka-services/ca.pem
+kafka_canary_topic: __strimzi_canary
+kafka_canary_group_id: canary
+kafka_canary_expected_cluster_size: "{{ groups['kafka'] | default([]) | length }}"
+kafka_canary_env_extra: {}
+
+kafka_canary_healthcheck: ["CMD", "curl", "-fsS", "http://localhost:8080/liveness"]

@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+# Schema Registry exposes Jetty and Kafka-client MBeans; export them as-is.
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+includeObjectNames:
+  - "kafka.schema.registry:*"
+  - "java.lang:*"
+rules:
+  - pattern: ".*"
