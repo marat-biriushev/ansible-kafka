@@ -143,19 +143,22 @@ cat > /etc/sysctl.d/90-kafka.conf <<'EOF'
 vm.swappiness = 1
 vm.dirty_ratio = 80
 vm.dirty_background_ratio = 5
-vm.max_map_count = 262144
 net.core.somaxconn = 4096
 net.ipv4.tcp_max_syn_backlog = 4096
 EOF
 sysctl --system
-sysctl vm.swappiness vm.max_map_count     # check the values
+sysctl vm.swappiness vm.max_map_count     # check: swappiness 1, max_map_count >= 262144
 ```
+
+`vm.max_map_count` is not in the file on purpose: RHEL 10 already sets it to
+1048576 (`/usr/lib/sysctl.d/10-map-count.conf`), above what Kafka needs.
+Add `vm.max_map_count = 262144` only on a host where it is lower.
 
 | Setting | Why |
 |---|---|
 | `vm.swappiness=1` | keep the JVM heap in RAM; swapping a broker stalls it and drops it out of the ISR |
 | `vm.dirty_ratio=80`, `vm.dirty_background_ratio=5` | Kafka relies on the page cache; flush in the background early, block writers only very late |
-| `vm.max_map_count=262144` | every log segment index is mmapped; the default 65530 runs out with many partitions |
+| `vm.max_map_count` >= 262144 | every log segment index is mmapped; the kernel default 65530 runs out with many partitions (RHEL 10 ships 1048576) |
 | `net.core.somaxconn`, `net.ipv4.tcp_max_syn_backlog = 4096` | room for connection bursts from many clients and after a restart |
 
 The open files limit (100000) is set by the `kafka` role in
