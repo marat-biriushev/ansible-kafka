@@ -5,7 +5,7 @@ kafka_domain: ipa.ipotekabank.uz
 # Generate once with kafka-storage.sh random-uuid (README "Cluster and
 # directory IDs") and never change it. The per-node kafka_directory_id
 # values are in host_vars.
-kafka_cluster_id: ""
+kafka_cluster_id: "XZPTU9I4S_i-I5610eDI4g"
 
 kafka_heap: 4g
 

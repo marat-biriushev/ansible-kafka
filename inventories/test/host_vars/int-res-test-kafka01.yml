@@ -5,4 +5,4 @@ kafka_node_id: 1
 # Must name the hypervisor host this VM runs on, see README "broker.rack".
 kafka_rack: kafka01
 # Generate once with kafka-storage.sh random-uuid, see README. Never change it.
-kafka_directory_id: ""
+kafka_directory_id: "UJK5MiTLSKasEZlTHYnVdQ"
