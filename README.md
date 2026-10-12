@@ -46,7 +46,7 @@ each with what to check after it.
 
 ```
 ansible.cfg                  roles_path, collections_path=./collections, pipelining
-requirements.yml             community.crypto, community.docker (pinned)
+requirements.yml             community.docker (pinned), for services.yml only
 artifacts.yml                offline artifacts: version, URL, checksum
 artifacts/                   downloaded files (git-ignored except README.md)
 certs/<env>/                 PEM files per environment (git-ignored except README.md)
@@ -216,7 +216,7 @@ carries them before the first run:
 | `firewalld` | all | firewall |
 | `python3` | all | Ansible modules (in the base OS) |
 | `docker-ce`, `docker-compose-plugin` | kafkasvc01 | installed by the `docker` role from ansible-ib |
-| `python3-cryptography` | control node | `community.crypto` for the self-signed TEST CA |
+| `openssl` (3.0+) | control node | generates the self-signed TEST CA and certificates |
 
 ```bash
 dnf install -y java-21-openjdk-headless openssl
@@ -238,7 +238,7 @@ versions and checksums:
 | `kafka_2.13-4.3.1.tgz` | 4.3.1 (sha512) | kafka01-03 |
 | `jmx_prometheus_javaagent-1.7.0.jar` | 1.7.0 (sha256) | kafka01-03, kafkasvc01 |
 | `node_exporter-1.12.1.linux-amd64.tar.gz` | 1.12.1 (sha256) | all hosts |
-| collections from `requirements.yml` | community.crypto 3.5.0, community.docker 5.4.0 | control node |
+| collections from `requirements.yml` | community.docker 5.4.0, only for `services.yml` | control node |
 | Java 21 RPMs (optional) | from the RHEL/Alma repos | kafka01-03 |
 
 Container images are not in the bundle: the services VM pulls them through
@@ -263,12 +263,28 @@ Container images are not in the bundle: the services VM pulls them through
    scripts/verify-artifacts.sh           # check: "All artifacts present", exit 0
    ```
 
-3. Install the collections offline (`ansible.cfg` points at `./collections`):
+3. Only for `services.yml`: install the collections offline (`ansible.cfg`
+   points at `./collections`). `kafka.yml` runs on plain `ansible-core`:
 
    ```bash
    ansible-galaxy collection install artifacts/collections/*.tar.gz -p ./collections
-   ansible-galaxy collection list -p ./collections   # check: community.crypto 3.5.0, community.docker 5.4.0
+   ansible-galaxy collection list -p ./collections   # check: community.docker 5.4.0
    ```
+
+Without a machine to run the fetch script on, download the files by hand
+(any browser) from the `url` of each entry in `artifacts.yml`, put them
+into `artifacts/` under the same names, and create the checksum list
+yourself; `verify-artifacts.sh` still checks every file against the
+pinned checksums:
+
+```bash
+(cd artifacts && find . -type f ! -name SHA256SUMS ! -name README.md | sort | xargs sha256sum > SHA256SUMS)
+scripts/verify-artifacts.sh
+```
+
+The collection tarball for `services.yml` is at
+`https://galaxy.ansible.com/api/v3/plugin/ansible/content/published/collections/artifacts/community-docker-5.4.0.tar.gz`
+(into `artifacts/collections/`).
 
 Each role starts by checking its files in `artifacts/` (and the checksum
 from `artifacts.yml`) and stops with "Put X in artifacts/, see README" if

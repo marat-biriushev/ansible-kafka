@@ -15,7 +15,6 @@ Expected content (versions from `artifacts.yml`):
 kafka_2.13-4.3.1.tgz
 jmx_prometheus_javaagent-1.7.0.jar
 node_exporter-1.12.1.linux-amd64.tar.gz
-collections/community-crypto-3.5.0.tar.gz
 collections/community-docker-5.4.0.tar.gz
 rpms/                  # optional, fetch-artifacts.sh --with-java
 SHA256SUMS

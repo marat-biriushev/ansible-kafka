@@ -1,7 +1,7 @@
 ---
 # Installed offline, see README "Offline artifacts".
+# kafka.yml needs none of them (ansible-core only); community.docker is for
+# services.yml (docker compose on the services VM).
 collections:
-  - name: community.crypto
-    version: "3.5.0"
   - name: community.docker
     version: "5.4.0"

@@ -1,6 +1,9 @@
 ---
-# Control node only. Produces the same files a CA-issued setup would have,
-# so the rest of the role does not care where they came from.
+# Control node only, plain openssl (3.0+), no extra collections. Produces
+# the same files a CA-issued setup would have, so the rest of the role does
+# not care where they came from. A certificate is (re)issued when it is
+# missing or expires within kafka_tls_selfsigned_renew_days; delete a .crt
+# to reissue it earlier (for example after changing the SANs).
 - name: Refuse self-signed certificates outside TEST
   ansible.builtin.assert:
     that: kafka_tls_env != 'prod'
@@ -18,74 +21,123 @@
   run_once: true
 
 - name: Generate the TEST CA key
-  community.crypto.openssl_privatekey:
-    path: "{{ kafka_tls_source_dir }}/ca.key"
-    type: RSA
-    size: 4096
-    mode: "0600"
-  delegate_to: localhost
-  become: false
-  run_once: true
-
-- name: Build the TEST CA request
-  community.crypto.openssl_csr_pipe:
-    privatekey_path: "{{ kafka_tls_source_dir }}/ca.key"
-    common_name: "{{ kafka_tls_selfsigned_ca_cn }}"
-    basic_constraints: ["CA:TRUE", "pathlen:0"]
-    basic_constraints_critical: true
-    key_usage: [keyCertSign, cRLSign]
-    key_usage_critical: true
-  register: kafka_tls_ca_csr
-  changed_when: false
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_tls_openssl }}"
+      - genpkey
+      - -algorithm
+      - RSA
+      - -pkeyopt
+      - rsa_keygen_bits:4096
+      - -out
+      - "{{ kafka_tls_source_dir }}/ca.key"
+    creates: "{{ kafka_tls_source_dir }}/ca.key"
   delegate_to: localhost
   become: false
   run_once: true
 
 - name: Self-sign the TEST CA
-  community.crypto.x509_certificate:
-    path: "{{ kafka_tls_source_dir }}/ca.pem"
-    csr_content: "{{ kafka_tls_ca_csr.csr }}"
-    privatekey_path: "{{ kafka_tls_source_dir }}/ca.key"
-    provider: selfsigned
-    selfsigned_not_after: "+{{ kafka_tls_selfsigned_ca_days }}d"
-    mode: "0644"
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_tls_openssl }}"
+      - req
+      - -x509
+      - -new
+      - -key
+      - "{{ kafka_tls_source_dir }}/ca.key"
+      - -sha256
+      - -days
+      - "{{ kafka_tls_selfsigned_ca_days }}"
+      - -subj
+      - "/CN={{ kafka_tls_selfsigned_ca_cn }}"
+      - -addext
+      - basicConstraints=critical,CA:TRUE,pathlen:0
+      - -addext
+      - keyUsage=critical,keyCertSign,cRLSign
+      - -out
+      - "{{ kafka_tls_source_dir }}/ca.pem"
+    creates: "{{ kafka_tls_source_dir }}/ca.pem"
   delegate_to: localhost
   become: false
   run_once: true
 
 - name: Generate the node key
-  community.crypto.openssl_privatekey:
-    path: "{{ kafka_tls_source_dir }}/{{ inventory_hostname }}.key"
-    type: RSA
-    size: 3072
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_tls_openssl }}"
+      - genpkey
+      - -algorithm
+      - RSA
+      - -pkeyopt
+      - rsa_keygen_bits:3072
+      - -out
+      - "{{ kafka_tls_source_dir }}/{{ inventory_hostname }}.key"
+    creates: "{{ kafka_tls_source_dir }}/{{ inventory_hostname }}.key"
+  delegate_to: localhost
+  become: false
+  when: inventory_hostname in groups[kafka_tls_broker_group]
+
+- name: Restrict the private keys
+  ansible.builtin.file:
+    path: "{{ kafka_tls_source_dir }}/{{ item }}"
     mode: "0600"
+  loop: >-
+    {{ ['ca.key'] + ([inventory_hostname ~ '.key'] if inventory_hostname in groups[kafka_tls_broker_group] else []) }}
   delegate_to: localhost
   become: false
-  when: inventory_hostname in groups[kafka_tls_broker_group]
+  when: not ansible_check_mode
 
-- name: Build the node request
-  community.crypto.openssl_csr_pipe:
-    privatekey_path: "{{ kafka_tls_source_dir }}/{{ inventory_hostname }}.key"
-    common_name: "{{ kafka_tls_fqdn }}"
-    subject_alt_name: "{{ kafka_tls_san }}"
-    key_usage: [digitalSignature, keyEncipherment]
-    key_usage_critical: true
-    extended_key_usage: [serverAuth, clientAuth]
-  register: kafka_tls_node_csr
+# rc 0: valid for longer than the renewal window; anything else (expiring,
+# missing, unreadable) means issue a new one
+- name: Check whether the node certificate needs issuing
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_tls_openssl }}"
+      - x509
+      - -checkend
+      - "{{ (kafka_tls_selfsigned_renew_days | int) * 86400 }}"
+      - -noout
+      - -in
+      - "{{ kafka_tls_source_dir }}/{{ inventory_hostname }}.crt"
+  register: kafka_tls_node_checkend
   changed_when: false
+  failed_when: false
+  check_mode: false
   delegate_to: localhost
   become: false
   when: inventory_hostname in groups[kafka_tls_broker_group]
 
-- name: Sign the node certificate with the TEST CA
-  community.crypto.x509_certificate:
-    path: "{{ kafka_tls_source_dir }}/{{ inventory_hostname }}.crt"
-    csr_content: "{{ kafka_tls_node_csr.csr }}"
-    provider: ownca
-    ownca_path: "{{ kafka_tls_source_dir }}/ca.pem"
-    ownca_privatekey_path: "{{ kafka_tls_source_dir }}/ca.key"
-    ownca_not_after: "+{{ kafka_tls_selfsigned_cert_days }}d"
-    mode: "0644"
+- name: Issue the node certificate from the TEST CA
+  ansible.builtin.command:
+    argv:
+      - "{{ kafka_tls_openssl }}"
+      - req
+      - -x509
+      - -new
+      - -key
+      - "{{ kafka_tls_source_dir }}/{{ inventory_hostname }}.key"
+      - -CA
+      - "{{ kafka_tls_source_dir }}/ca.pem"
+      - -CAkey
+      - "{{ kafka_tls_source_dir }}/ca.key"
+      - -sha256
+      - -days
+      - "{{ kafka_tls_selfsigned_cert_days }}"
+      - -subj
+      - "/CN={{ kafka_tls_fqdn }}"
+      - -addext
+      - basicConstraints=critical,CA:FALSE
+      - -addext
+      - keyUsage=critical,digitalSignature,keyEncipherment
+      - -addext
+      - extendedKeyUsage=serverAuth,clientAuth
+      - -addext
+      - "subjectAltName={{ kafka_tls_san | join(',') }}"
+      - -out
+      - "{{ kafka_tls_source_dir }}/{{ inventory_hostname }}.crt"
+  changed_when: true
   delegate_to: localhost
   become: false
-  when: inventory_hostname in groups[kafka_tls_broker_group]
+  when:
+    - inventory_hostname in groups[kafka_tls_broker_group]
+    - kafka_tls_node_checkend.rc != 0

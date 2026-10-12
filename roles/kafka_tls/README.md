@@ -20,12 +20,14 @@ when it is missing, or when it no longer opens with the vault password
 (password rotation); a rebuild marks the broker for a rolling restart.
 
 `kafka_tls_selfsigned: true` (TEST only, refused when `kafka_env` is
-`prod`) generates a CA and node certificates with `community.crypto` on
+`prod`) generates a CA and node certificates with plain `openssl` (3.0+) on
 the control node into the same directory, with the same SANs and
-`extendedKeyUsage = serverAuth, clientAuth`. Needs `python3-cryptography`
-on the control node.
+`extendedKeyUsage = serverAuth, clientAuth`. No Ansible collection is
+needed. A node certificate is reissued when it is missing or expires within
+`kafka_tls_selfsigned_renew_days`; delete a `.crt` to reissue it earlier
+(for example after changing the SANs).
 
-The certificate expiry is written to
+The certificate expiry (read with `openssl` on the broker) is written to
 `/var/lib/node_exporter/textfile/kafka_tls.prom` as
 `kafka_tls_certificate_not_after_seconds` for the expiry alerts.
 
@@ -43,6 +45,8 @@ All of them are in `defaults/main.yml` and validated by `meta/argument_specs.yml
 | `kafka_tls_selfsigned_ca_cn` | `Kafka TEST CA` | CN of the self-signed CA. |
 | `kafka_tls_selfsigned_ca_days` | `3650` | Validity of the self-signed CA. |
 | `kafka_tls_selfsigned_cert_days` | `730` | Validity of self-signed node certificates. |
+| `kafka_tls_selfsigned_renew_days` | `30` | Reissue a self-signed node certificate when it expires within this many days. |
+| `kafka_tls_openssl` | `openssl` | openssl binary on the control node (3.0+) for the self-signed certificates. |
 | `kafka_tls_env` | `{{ kafka_env \| default('') }}` | Environment name; self-signed mode refuses "prod". |
 | `kafka_tls_broker_group` | `kafka` | Group that gets keystore and truststore. |
 | `kafka_tls_client_group` | `kafka_services` | Group that gets only the CA file. |

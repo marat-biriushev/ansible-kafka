@@ -20,6 +20,12 @@ argument_specs:
       kafka_tls_selfsigned_cert_days:
         description: Validity of self-signed node certificates.
         type: int
+      kafka_tls_selfsigned_renew_days:
+        description: Reissue a self-signed node certificate when it expires within this many days.
+        type: int
+      kafka_tls_openssl:
+        description: openssl binary on the control node (3.0+) for the self-signed certificates.
+        type: str
       kafka_tls_env:
         description: Environment name; self-signed mode refuses "prod".
         type: str

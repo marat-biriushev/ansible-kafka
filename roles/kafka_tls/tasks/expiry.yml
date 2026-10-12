@@ -1,12 +1,25 @@
 ---
 # The expiry date of a certificate never changes, so a static textfile
 # metric is enough for the "certificate expires in < 30 / < 7 days" alerts.
-- name: Read the certificate expiry on the control node
-  community.crypto.x509_certificate_info:
-    path: "{{ kafka_tls_source_dir }}/{{ inventory_hostname }}.crt"
-  register: kafka_tls_cert_info
-  delegate_to: localhost
-  become: false
+# Read with openssl on the broker, from the copy the role just put there.
+- name: Read the certificate expiry
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - x509
+      - -noout
+      - -enddate
+      - -subject
+      - -nameopt
+      - multiline
+      - -dateopt
+      - iso_8601
+      - -in
+      - "{{ kafka_tls_dir }}/node.crt"
+  register: kafka_tls_cert_dates
+  changed_when: false
+  check_mode: false
+  failed_when: false
 
 - name: Create the node_exporter textfile directory
   ansible.builtin.file:
@@ -25,9 +38,13 @@
     content: |
       # HELP kafka_tls_certificate_not_after_seconds Expiry of the Kafka broker certificate, Unix time.
       # TYPE kafka_tls_certificate_not_after_seconds gauge
-      kafka_tls_certificate_not_after_seconds{subject="{{ kafka_tls_cert_info.subject.commonName | default('') }}"} {{ _not_after }}
+      kafka_tls_certificate_not_after_seconds{subject="{{ _subject }}"} {{ _not_after }}
   vars:
-    # not_after is UTC (YYYYMMDDHHMMSSZ); subtracting the epoch avoids the local timezone
+    # notAfter=2028-10-12 06:00:00Z (UTC); subtracting the epoch avoids the local timezone
     _not_after: >-
-      {{ ((kafka_tls_cert_info.not_after | to_datetime('%Y%m%d%H%M%SZ'))
+      {{ ((kafka_tls_cert_dates.stdout | regex_search('notAfter=(\S+ \S+?)Z', '\1') | first
+           | to_datetime('%Y-%m-%d %H:%M:%S'))
           - ('19700101000000' | to_datetime('%Y%m%d%H%M%S'))).total_seconds() | int }}
+    _subject: >-
+      {{ kafka_tls_cert_dates.stdout | regex_search('commonName\s*=\s*(\S+)', '\1') | default([''], true) | first }}
+  when: kafka_tls_cert_dates.rc == 0
