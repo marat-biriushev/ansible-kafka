@@ -6,7 +6,6 @@ Offline files for the roles. Filled from the bundle made by
 ```bash
 tar -xzf ansible-kafka-artifacts-<date>.tar.gz -C artifacts/
 scripts/verify-artifacts.sh
-ansible-galaxy collection install artifacts/collections/*.tar.gz -p ./collections
 ```
 
 Expected content (versions from `artifacts.yml`):
@@ -15,7 +14,6 @@ Expected content (versions from `artifacts.yml`):
 kafka_2.13-4.3.1.tgz
 jmx_prometheus_javaagent-1.7.0.jar
 node_exporter-1.12.1.linux-amd64.tar.gz
-collections/community-docker-5.4.0.tar.gz
 rpms/                  # optional, fetch-artifacts.sh --with-java
 SHA256SUMS
 ```

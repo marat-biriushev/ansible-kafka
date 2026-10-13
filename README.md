@@ -4,6 +4,8 @@ Apache Kafka 4.3.1 (KRaft, combined broker+controller on 3 nodes) and its
 service tools for Integration on RHEL 10, TEST and PROD. Everything runs
 from an isolated control node: no task reaches the internet, all binaries
 come from `artifacts/`, container images from the internal Nexus mirror.
+The control node needs only `ansible-core` 2.15 or newer and `openssl`:
+no Ansible collections.
 
 Scope of this repository:
 
@@ -45,8 +47,7 @@ each with what to check after it.
 ## Layout
 
 ```
-ansible.cfg                  roles_path, collections_path=./collections, pipelining
-requirements.yml             community.docker (pinned), for services.yml only
+ansible.cfg                  roles_path, pipelining
 artifacts.yml                offline artifacts: version, URL, checksum
 artifacts/                   downloaded files (git-ignored except README.md)
 certs/<env>/                 PEM files per environment (git-ignored except README.md)
@@ -238,14 +239,12 @@ versions and checksums:
 | `kafka_2.13-4.3.1.tgz` | 4.3.1 (sha512) | kafka01-03 |
 | `jmx_prometheus_javaagent-1.7.0.jar` | 1.7.0 (sha256) | kafka01-03, kafkasvc01 |
 | `node_exporter-1.12.1.linux-amd64.tar.gz` | 1.12.1 (sha256) | all hosts |
-| collections from `requirements.yml` | community.docker 5.4.0, only for `services.yml` | control node |
 | Java 21 RPMs (optional) | from the RHEL/Alma repos | kafka01-03 |
 
 Container images are not in the bundle: the services VM pulls them through
 `docker-proxy.nexus.otp.ipotekabank.uz` (see the Docker role in ansible-ib).
 
-1. On a machine **with** internet (needs curl, python3 with PyYAML,
-   ansible-galaxy):
+1. On a machine **with** internet (needs curl, python3 with PyYAML):
 
    ```bash
    git clone <this repo> && cd ansible-kafka
@@ -263,14 +262,6 @@ Container images are not in the bundle: the services VM pulls them through
    scripts/verify-artifacts.sh           # check: "All artifacts present", exit 0
    ```
 
-3. Only for `services.yml`: install the collections offline (`ansible.cfg`
-   points at `./collections`). `kafka.yml` runs on plain `ansible-core`:
-
-   ```bash
-   ansible-galaxy collection install artifacts/collections/*.tar.gz -p ./collections
-   ansible-galaxy collection list -p ./collections   # check: community.docker 5.4.0
-   ```
-
 Without a machine to run the fetch script on, download the files by hand
 (any browser) from the `url` of each entry in `artifacts.yml`, put them
 into `artifacts/` under the same names, and create the checksum list
@@ -281,10 +272,6 @@ pinned checksums:
 (cd artifacts && find . -type f ! -name SHA256SUMS ! -name README.md | sort | xargs sha256sum > SHA256SUMS)
 scripts/verify-artifacts.sh
 ```
-
-The collection tarball for `services.yml` is at
-`https://galaxy.ansible.com/api/v3/plugin/ansible/content/published/collections/artifacts/community-docker-5.4.0.tar.gz`
-(into `artifacts/collections/`).
 
 Each role starts by checking its files in `artifacts/` (and the checksum
 from `artifacts.yml`) and stops with "Put X in artifacts/, see README" if
@@ -370,7 +357,7 @@ lookups; the roles do not change. Tasks that handle passwords have
 
 From the repository root (so `ansible.cfg` is used), TEST as example.
 
-0. OS preparation done, artifacts verified, collections installed, IDs
+0. OS preparation done, artifacts verified, IDs
    and vault filled in, certificates in place (or self-signed on TEST).
    Check reachability:
 

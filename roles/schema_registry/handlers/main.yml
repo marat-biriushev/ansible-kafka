@@ -1,5 +1,5 @@
 ---
 - name: Restart schema-registry
-  community.docker.docker_compose_v2:
-    project_src: "{{ schema_registry_project_dir }}"
-    state: restarted
+  ansible.builtin.command:
+    argv: [docker, compose, --ansi, never, --project-directory, "{{ schema_registry_project_dir }}", restart]
+  changed_when: true

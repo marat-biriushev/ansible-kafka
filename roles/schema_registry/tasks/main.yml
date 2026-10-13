@@ -80,11 +80,13 @@
     mode: "0644"
 
 - name: Start Schema Registry
-  community.docker.docker_compose_v2:
-    project_src: "{{ schema_registry_project_dir }}"
-    state: present
-    pull: missing
-    # Compose does not always notice a changed env_file
-    recreate: "{{ 'always' if schema_registry_secrets is changed else 'auto' }}"
-    wait: true
-    wait_timeout: 300
+  # Pulls a missing image, (re)creates the container when compose.yml or the
+  # env_file changed, and waits for the healthcheck. The output lists what
+  # compose did; "Running"/"Healthy" alone means nothing changed.
+  ansible.builtin.command:
+    argv: >-
+      {{ ['docker', 'compose', '--ansi', 'never', '--project-directory', schema_registry_project_dir,
+          'up', '--detach', '--wait', '--wait-timeout', '300']
+         + (['--force-recreate'] if schema_registry_secrets is changed else []) }}
+  register: schema_registry_up
+  changed_when: (schema_registry_up.stdout ~ schema_registry_up.stderr) is search('(Created|Started|Pulled)')

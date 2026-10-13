@@ -38,11 +38,13 @@
     mode: "0644"
 
 - name: Start kafka-exporter
-  community.docker.docker_compose_v2:
-    project_src: "{{ kafka_exporter_project_dir }}"
-    state: present
-    pull: missing
-    # Compose does not always notice a changed env_file
-    recreate: "{{ 'always' if kafka_exporter_secrets is changed else 'auto' }}"
-    wait: true
-    wait_timeout: 300
+  # Pulls a missing image, (re)creates the container when compose.yml or the
+  # env_file changed, and waits for the healthcheck. The output lists what
+  # compose did; "Running"/"Healthy" alone means nothing changed.
+  ansible.builtin.command:
+    argv: >-
+      {{ ['docker', 'compose', '--ansi', 'never', '--project-directory', kafka_exporter_project_dir,
+          'up', '--detach', '--wait', '--wait-timeout', '300']
+         + (['--force-recreate'] if kafka_exporter_secrets is changed else []) }}
+  register: kafka_exporter_up
+  changed_when: (kafka_exporter_up.stdout ~ kafka_exporter_up.stderr) is search('(Created|Started|Pulled)')

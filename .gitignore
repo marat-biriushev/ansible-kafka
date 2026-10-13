@@ -10,8 +10,6 @@
 vault.yml
 .vault_pass*
 
-# Collections installed offline from artifacts/collections
-/collections/
 
 *.retry
 .ansible/

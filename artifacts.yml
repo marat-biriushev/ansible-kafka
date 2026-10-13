@@ -35,10 +35,6 @@ artifacts:
 #    sha256: <sha256 of the file>
 connect_plugins: []
 
-# Ansible collections from requirements.yml, fetched with
-# "ansible-galaxy collection download" into artifacts/collections/.
-collections_requirements: requirements.yml
-
 # Optional: OpenJDK 21 headless with dependencies, only when the internal dnf
 # repository does not carry it. Fetched with "dnf download --resolve" on a
 # RHEL 10 / AlmaLinux 10 machine into artifacts/rpms/, installed by hand.

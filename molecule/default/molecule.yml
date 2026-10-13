@@ -4,10 +4,6 @@
 #   python -m pip install molecule "molecule-plugins[docker]"
 #   scripts/fetch-artifacts.sh   # Kafka tarball and javaagent jar into artifacts/
 #   molecule test
-dependency:
-  name: galaxy
-  options:
-    requirements-file: ${MOLECULE_PROJECT_DIRECTORY}/requirements.yml
 driver:
   name: docker
 platforms:
@@ -98,7 +94,6 @@ verifier:
   name: ansible
 scenario:
   test_sequence:
-    - dependency
     - destroy
     - create
     - prepare

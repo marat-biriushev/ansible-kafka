@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # Run on a machine WITH internet access. Downloads everything listed in
-# artifacts.yml into artifacts/, checks the pinned checksums, downloads the
-# Ansible collections from requirements.yml, and packs it all into
-# ansible-kafka-artifacts-<date>.tar.gz for transfer to the control node.
+# artifacts.yml into artifacts/, checks the pinned checksums, and packs it
+# all into ansible-kafka-artifacts-<date>.tar.gz for the control node.
 #
-#   scripts/fetch-artifacts.sh                 # artifacts + collections
+#   scripts/fetch-artifacts.sh                 # artifacts
 #   scripts/fetch-artifacts.sh --with-java     # + java-21-openjdk-headless RPMs (needs dnf, RHEL/Alma 10)
 #
 # Idempotent: a file already present with the right checksum is not fetched again.
-# Needs: bash, curl, sha256sum/sha512sum, python3 with PyYAML, ansible-galaxy.
+# Needs: bash, curl, sha256sum/sha512sum, python3 with PyYAML.
 # Container images are not part of the bundle: the services VM pulls them
 # from the Nexus docker-proxy.
 set -euo pipefail
@@ -26,7 +25,7 @@ for arg in "$@"; do
   esac
 done
 
-for tool in curl sha256sum sha512sum python3 ansible-galaxy tar; do
+for tool in curl sha256sum sha512sum python3 tar; do
   command -v "${tool}" >/dev/null || { echo "missing tool: ${tool}" >&2; exit 1; }
 done
 
@@ -64,9 +63,6 @@ while IFS=$'\t' read -r name file url algo sum; do
   fi
   mv "${target}.part" "${target}"
 done <<< "${entries}"
-
-echo "fetching  collections from requirements.yml"
-ansible-galaxy collection download -r "${repo_dir}/requirements.yml" -p "${out_dir}/collections"
 
 if [[ "${with_java}" == true ]]; then
   command -v dnf >/dev/null || { echo "--with-java needs dnf (RHEL 10 / AlmaLinux 10)" >&2; exit 1; }
