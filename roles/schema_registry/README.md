@@ -13,7 +13,7 @@ Nexus docker-proxy (`container_registry`).
 * The JMX exporter javaagent (same jar as on the brokers, from
   `artifacts/`) runs in the container and is published on 7071 for the
   `schema-registry` scrape job.
-* `restart: unless-stopped` and a healthcheck (`curl /subjects`). Docker
+* `restart: unless-stopped` and a healthcheck (`GET /subjects` over bash `/dev/tcp`, the image has no curl). Docker
   marks an unhealthy container but does not restart it by itself.
 
 The license of `confluentinc/cp-schema-registry` is an open question;
@@ -41,5 +41,5 @@ All of them are in `defaults/main.yml` and validated by `meta/argument_specs.yml
 | `schema_registry_jmx_exporter_file` | `jmx_prometheus_javaagent-1.7.0.jar` | Jar file name in artifacts/. |
 | `schema_registry_artifacts_dir` | `(see defaults/main.yml)` | Directory with the offline artifacts on the control node. |
 | `schema_registry_heap` | `512m` | JVM heap. |
-| `schema_registry_healthcheck` | `["CMD", "curl", "-fsS", "http://localhost:8081/subjects"]` | Docker healthcheck test. |
+| `schema_registry_healthcheck` | `GET /subjects` through bash `/dev/tcp` | Docker healthcheck test. |
 | `schema_registry_env_extra` | `{}` | Extra environment variables. |

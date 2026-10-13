@@ -23,6 +23,11 @@ schema_registry_jmx_exporter_file: jmx_prometheus_javaagent-1.7.0.jar
 schema_registry_artifacts_dir: "{{ artifacts_dir | default(playbook_dir ~ '/../artifacts') }}"
 
 schema_registry_heap: 512m
-schema_registry_healthcheck: ["CMD", "curl", "-fsS", "http://localhost:8081/subjects"]
+# The Confluent 8.x image has neither curl nor wget: plain HTTP over bash /dev/tcp
+schema_registry_healthcheck:
+  - CMD
+  - bash
+  - -c
+  - exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /subjects HTTP/1.0\r\n\r\n' >&3 && head -n1 <&3 | grep -q ' 200 '
 # Extra environment, e.g. {SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: full}
 schema_registry_env_extra: {}
