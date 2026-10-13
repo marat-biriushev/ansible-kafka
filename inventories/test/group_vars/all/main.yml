@@ -22,9 +22,9 @@ kafka_tls_bootstrap_name: "{{ kafka_bootstrap_name }}"
 
 # --- Images (Nexus docker-proxy, see the docker role in ansible-ib) --------
 container_registry: docker-proxy.nexus.otp.ipotekabank.uz
-# The canary is on quay.io only: Nexus repository docker-ocp-proxy-quay.
-# Check the name with "docker pull" on kafkasvc01 before the first run.
-kafka_canary_image: docker-ocp-proxy-quay.nexus.otp.ipotekabank.uz/strimzi/canary:0.11.0
+# The canary is on quay.io only. Set the Nexus quay.io proxy here (check
+# with "docker pull" on kafkasvc01) and enable it below.
+# kafka_canary_image: <nexus-quay-proxy>/strimzi/canary:0.11.0
 
 # --- Secrets ---------------------------------------------------------------
 # Values live in vault.yml (ansible-vault), see vault.yml.example. Only these
@@ -96,7 +96,8 @@ kafka_topics_list:
 kafka_ui_auth_type: LOGIN_FORM
 kafka_ui_schema_registry_url: "http://{{ groups['kafka_services'][0] }}.{{ kafka_domain }}:8081"
 kafka_ui_kafka_connect_url: "http://{{ groups['kafka_services'][0] }}.{{ kafka_domain }}:8083"
-kafka_canary_enabled: true
+# Off until Nexus serves quay.io with a trusted certificate
+kafka_canary_enabled: false
 
 # Kafka Connect plugins from artifacts/connect-plugins/, pinned in
 # artifacts.yml (connect_plugins). Empty until the database connector is chosen.
