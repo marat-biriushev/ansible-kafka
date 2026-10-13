@@ -15,6 +15,8 @@ vault_kafka_scram_passwords:
   kafka-exporter: CHANGE_ME_kafka_exporter
   canary: CHANGE_ME_canary
   kafka-connect: CHANGE_ME_kafka_connect
+  # TEST only: shared account for the developers' applications
+  test-dev: CHANGE_ME_test_dev
 
 # Secrets for connector configs (database passwords...). A connector uses
 # them as ${file:/etc/kafka-connect/secrets/connectors.properties:<key>}.

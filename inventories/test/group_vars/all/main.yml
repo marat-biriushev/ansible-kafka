@@ -70,6 +70,13 @@ kafka_users_acls:
   - { principal: "User:kafka-connect", resource_type: topic, name: connect-, pattern_type: prefixed, operations: [All] }
   - { principal: "User:kafka-connect", resource_type: group, name: connect-, pattern_type: prefixed, operations: [All] }
   - { principal: "User:kafka-connect", resource_type: cluster, operations: [Describe, DescribeConfigs] }
+  # TEST only: one shared account for the developers' applications, full
+  # rights on all topics and groups (topics are created in Kafka UI). No
+  # isolation between applications; PROD gets one account per application.
+  - { principal: "User:test-dev", resource_type: topic, name: "*", operations: [All] }
+  - { principal: "User:test-dev", resource_type: group, name: "*", operations: [All] }
+  - { principal: "User:test-dev", resource_type: transactional-id, name: "*", operations: [All] }
+  - { principal: "User:test-dev", resource_type: cluster, operations: [Describe, IdempotentWrite] }
 
 kafka_topics_list:
   - name: _schemas
