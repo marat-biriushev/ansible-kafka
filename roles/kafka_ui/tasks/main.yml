@@ -5,9 +5,9 @@
       - kafka_ui_bootstrap_servers | length > 0
       - kafka_ui_auth_type in ['LOGIN_FORM', 'OAUTH2', 'LDAP']
       - kafka_ui_kafka_password | length >= 12
-      - kafka_ui_kafka_password is not search('[\s"$#\\]')
+      - kafka_ui_kafka_password is not search('[\\s"$#\\\\]')
       - kafka_ui_auth_type != 'LOGIN_FORM' or kafka_ui_login_password | length >= 12
-      - kafka_ui_login_password is not search('[\s$#]')
+      - kafka_ui_login_password is not search('[\\s$#]')
     fail_msg: >-
       kafka_ui_bootstrap_servers must be set; kafka_ui_auth_type is LOGIN_FORM, OAUTH2 or LDAP;
       kafka_ui_kafka_password (and kafka_ui_login_password for LOGIN_FORM) come from the vault,

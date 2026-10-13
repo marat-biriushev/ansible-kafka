@@ -4,7 +4,7 @@
     that:
       - kafka_canary_bootstrap_servers | length > 0
       - kafka_canary_kafka_password | length >= 12
-      - kafka_canary_kafka_password is not search('[\s"$#\\]')
+      - kafka_canary_kafka_password is not search('[\\s"$#\\\\]')
     fail_msg: >-
       kafka_canary_bootstrap_servers must be set and kafka_canary_kafka_password must come from
       the vault (12+ characters, no spaces, quotes, $, # or backslashes).

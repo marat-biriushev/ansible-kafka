@@ -5,7 +5,7 @@
       - schema_registry_bootstrap_servers | length > 0
       - schema_registry_kafka_password | length >= 12
       # Goes into an env file and a JAAS string
-      - schema_registry_kafka_password is not search('[\s"$#\\]')
+      - schema_registry_kafka_password is not search('[\\s"$#\\\\]')
     fail_msg: >-
       schema_registry_bootstrap_servers must be set and schema_registry_kafka_password must come from
       the vault (12+ characters, no spaces, quotes, $, # or backslashes).

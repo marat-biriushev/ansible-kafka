@@ -4,7 +4,7 @@
     that:
       - kafka_connect_bootstrap_servers | length > 0
       - kafka_connect_kafka_password | length >= 12
-      - kafka_connect_kafka_password is not search('[\s"$#\\]')
+      - kafka_connect_kafka_password is not search('[\\s"$#\\\\]')
       - kafka_connect_client_override_policy in ['All', 'None', 'Principal']
     fail_msg: >-
       kafka_connect_bootstrap_servers must be set and kafka_connect_kafka_password must come from
