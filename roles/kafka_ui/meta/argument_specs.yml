@@ -2,7 +2,7 @@
 # Generated from defaults/main.yml; keep the two in sync.
 argument_specs:
   main:
-    short_description: Kafka UI (kafbat) in Docker (compose), read-only
+    short_description: Kafka UI (kafbat) in Docker (compose)
     options:
       kafka_ui_image:
         description: Image reference (Nexus mirror).
@@ -21,7 +21,7 @@ argument_specs:
         type: list
         elements: raw
       kafka_ui_kafka_user:
-        description: SCRAM account (read-only ACLs).
+        description: SCRAM account (All ACLs).
         type: str
       kafka_ui_kafka_password:
         description: Its password (vault).

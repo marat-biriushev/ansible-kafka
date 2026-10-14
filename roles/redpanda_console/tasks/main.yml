@@ -1,0 +1,90 @@
+---
+- name: Deploy Redpanda Console
+  when: redpanda_console_enabled
+  block:
+    - name: Check the Redpanda Console settings
+      ansible.builtin.assert:
+        that:
+          - redpanda_console_bootstrap_servers | length > 0
+          - redpanda_console_kafka_password | length >= 12
+          - redpanda_console_kafka_password is not search('[\\s"$#\\\\]')
+          - redpanda_console_login_user is match('^[A-Za-z0-9._-]+$')
+          - redpanda_console_login_password | length >= 12
+        fail_msg: >-
+          redpanda_console_bootstrap_servers must be set; redpanda_console_kafka_password and
+          redpanda_console_login_password come from the vault (12+ characters, the Kafka one without
+          spaces, quotes, $, # or backslashes); redpanda_console_login_user is letters, digits, . _ -.
+        quiet: true
+      no_log: true
+
+    - name: Create the project directory
+      ansible.builtin.file:
+        path: "{{ redpanda_console_project_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    # SHA-512 crypt with a fixed salt: same password, same file, no change
+    - name: Hash the login password
+      ansible.builtin.command:
+        argv: [openssl, passwd, "-6", -salt, "{{ redpanda_console_htpasswd_salt }}", -stdin]
+        stdin: "{{ redpanda_console_login_password }}"
+      register: redpanda_console_login_hash
+      changed_when: false
+      check_mode: false
+      no_log: true
+
+    # Read by the nginx worker (uid 101) through the bind mount; the
+    # project directory itself is root-only
+    - name: Deploy the htpasswd file
+      ansible.builtin.copy:
+        dest: "{{ redpanda_console_project_dir }}/htpasswd"
+        content: "{{ redpanda_console_login_user }}:{{ redpanda_console_login_hash.stdout }}\n"
+        owner: root
+        group: root
+        mode: "0644"
+      no_log: true
+      notify: Restart redpanda-console
+
+    - name: Deploy the secrets
+      ansible.builtin.template:
+        src: secrets.env.j2
+        dest: "{{ redpanda_console_project_dir }}/secrets.env"
+        owner: root
+        group: root
+        mode: "0600"
+      register: redpanda_console_secrets
+      no_log: true
+
+    - name: Deploy the Console and nginx configs
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "{{ redpanda_console_project_dir }}/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - config.yml
+        - nginx.conf
+      notify: Restart redpanda-console
+
+    - name: Deploy compose.yml
+      ansible.builtin.template:
+        src: compose.yml.j2
+        dest: "{{ redpanda_console_project_dir }}/compose.yml"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Start Redpanda Console
+      # Pulls a missing image, (re)creates the containers when compose.yml or
+      # the env_file changed, and waits for the healthchecks. The output lists
+      # what compose did; "Running"/"Healthy" alone means nothing changed.
+      ansible.builtin.command:
+        argv: >-
+          {{ ['docker', 'compose', '--ansi', 'never', '--project-directory', redpanda_console_project_dir,
+              'up', '--detach', '--wait', '--wait-timeout', '300']
+             + (['--force-recreate'] if redpanda_console_secrets is changed else []) }}
+      register: redpanda_console_up
+      changed_when: (redpanda_console_up.stdout ~ redpanda_console_up.stderr) is search('(Created|Started|Pulled)')

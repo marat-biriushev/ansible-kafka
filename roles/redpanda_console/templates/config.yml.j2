@@ -1,0 +1,28 @@
+# {{ ansible_managed }}
+# Redpanda Console v3; the Kafka password comes from KAFKA_SASL_PASSWORD
+kafka:
+  brokers: {{ redpanda_console_bootstrap_servers | to_json }}
+  sasl:
+    enabled: true
+    mechanism: SCRAM-SHA-512
+    username: "{{ redpanda_console_kafka_user }}"
+  tls:
+    enabled: true
+    caFilepath: /etc/kafka-ca/ca.pem
+{% if redpanda_console_schema_registry_url %}
+schemaRegistry:
+  enabled: true
+  urls: ["{{ redpanda_console_schema_registry_url }}"]
+{% endif %}
+{% if redpanda_console_kafka_connect_url %}
+kafkaConnect:
+  enabled: true
+  clusters:
+    - name: kafka-connect
+      url: "{{ redpanda_console_kafka_connect_url }}"
+{% endif %}
+server:
+  listenPort: 8080
+# No telemetry to Redpanda (the host has no internet anyway)
+analytics:
+  enabled: false

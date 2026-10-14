@@ -39,6 +39,8 @@ kafka_ui_login_password: "{{ vault_kafka_ui_login_password }}"
 kafka_exporter_kafka_password: "{{ vault_kafka_scram_passwords['kafka-exporter'] }}"
 kafka_canary_kafka_password: "{{ vault_kafka_scram_passwords['canary'] }}"
 kafka_connect_kafka_password: "{{ vault_kafka_scram_passwords['kafka-connect'] }}"
+redpanda_console_kafka_password: "{{ vault_kafka_scram_passwords['redpanda-console'] }}"
+redpanda_console_login_password: "{{ vault_redpanda_console_login_password }}"
 kafka_connect_connector_secrets: "{{ vault_kafka_connect_connector_secrets | default({}) }}"
 
 # --- Service accounts, ACLs and topics (playbooks/users-acl.yml) -----------
@@ -70,6 +72,11 @@ kafka_users_acls:
   - { principal: "User:kafka-connect", resource_type: topic, name: connect-, pattern_type: prefixed, operations: [All] }
   - { principal: "User:kafka-connect", resource_type: group, name: connect-, pattern_type: prefixed, operations: [All] }
   - { principal: "User:kafka-connect", resource_type: cluster, operations: [Describe, DescribeConfigs] }
+  # Redpanda Console (TEST only): creates SCRAM users, topics and ACLs
+  - { principal: "User:redpanda-console", resource_type: topic, name: "*", operations: [All] }
+  - { principal: "User:redpanda-console", resource_type: group, name: "*", operations: [All] }
+  - { principal: "User:redpanda-console", resource_type: transactional-id, name: "*", operations: [All] }
+  - { principal: "User:redpanda-console", resource_type: cluster, operations: [All] }
   # TEST only: one shared account for the developers' applications, full
   # rights on all topics and groups (topics are created in Kafka UI). No
   # isolation between applications; PROD gets one account per application.
@@ -103,6 +110,11 @@ kafka_topics_list:
 kafka_ui_auth_type: LOGIN_FORM
 kafka_ui_schema_registry_url: "http://{{ groups['kafka_services'][0] }}.{{ kafka_domain }}:8081"
 kafka_ui_kafka_connect_url: "http://{{ groups['kafka_services'][0] }}.{{ kafka_domain }}:8083"
+# Redpanda Console on :8090 behind nginx basic auth: developers create SCRAM
+# users, topics and ACLs there. TEST only.
+redpanda_console_enabled: true
+redpanda_console_schema_registry_url: "{{ kafka_ui_schema_registry_url }}"
+redpanda_console_kafka_connect_url: "{{ kafka_ui_kafka_connect_url }}"
 # Off until Nexus serves quay.io with a trusted certificate
 kafka_canary_enabled: false
 

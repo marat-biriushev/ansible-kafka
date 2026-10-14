@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: ipotekabank DevOps
+  description: Redpanda Console in Docker (compose) behind nginx basic auth
+  license: proprietary
+  min_ansible_version: "2.15"
+  platforms:
+    - name: EL
+      versions:
+        - "10"
+dependencies: []

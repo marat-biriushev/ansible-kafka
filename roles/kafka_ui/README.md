@@ -30,7 +30,7 @@ All of them are in `defaults/main.yml` and validated by `meta/argument_specs.yml
 | `kafka_ui_port` | `8080` | Published HTTP port. |
 | `kafka_ui_cluster_name` | `{{ kafka_env \| default('kafka') }}` | Cluster name shown in the UI. |
 | `kafka_ui_bootstrap_servers` | `{{ kafka_bootstrap_servers }}` | Broker host:port list (CLIENT listener). |
-| `kafka_ui_kafka_user` | `kafka-ui` | SCRAM account (read-only ACLs). |
+| `kafka_ui_kafka_user` | `kafka-ui` | SCRAM account (All ACLs). |
 | `kafka_ui_kafka_password` | `""` | Its password (vault). |
 | `kafka_ui_ca_file` | `/etc/kafka-services/ca.pem` | CA file on the host, mounted read-only. |
 | `kafka_ui_readonly` | `false` | Read-only mode in the UI. |

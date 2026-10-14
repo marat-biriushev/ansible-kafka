@@ -7,6 +7,8 @@ vault_kafka_admin_password: CHANGE_ME_admin
 vault_kafka_tls_keystore_password: CHANGE_ME_keystore
 vault_kafka_tls_truststore_password: CHANGE_ME_truststore
 vault_kafka_ui_login_password: CHANGE_ME_ui_login
+# TEST only: nginx password in front of Redpanda Console
+vault_redpanda_console_login_password: CHANGE_ME_redpanda_console_login
 
 # One SCRAM-SHA-512 account per service; the keys are the account names.
 vault_kafka_scram_passwords:
@@ -15,6 +17,8 @@ vault_kafka_scram_passwords:
   kafka-exporter: CHANGE_ME_kafka_exporter
   canary: CHANGE_ME_canary
   kafka-connect: CHANGE_ME_kafka_connect
+  # TEST only: Redpanda Console
+  redpanda-console: CHANGE_ME_redpanda_console
   # TEST only: shared account for the developers' applications
   test-dev: CHANGE_ME_test_dev
 

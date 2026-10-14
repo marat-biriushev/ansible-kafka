@@ -1,0 +1,50 @@
+---
+argument_specs:
+  main:
+    short_description: Redpanda Console in Docker (compose) behind nginx basic auth
+    options:
+      redpanda_console_enabled:
+        description: Deploy Redpanda Console on this host.
+        type: bool
+      redpanda_console_image:
+        description: Console image reference (Nexus mirror).
+        type: str
+      redpanda_console_nginx_image:
+        description: nginx image reference (Nexus mirror).
+        type: str
+      redpanda_console_project_dir:
+        description: Compose project directory.
+        type: str
+      redpanda_console_port:
+        description: Port nginx publishes on the host.
+        type: int
+      redpanda_console_bootstrap_servers:
+        description: Broker host:port list (CLIENT listener).
+        type: list
+        elements: raw
+      redpanda_console_kafka_user:
+        description: SCRAM account of Console (All ACLs).
+        type: str
+      redpanda_console_kafka_password:
+        description: Its password (vault).
+        type: str
+        no_log: true
+      redpanda_console_ca_file:
+        description: CA file on the host, mounted read-only.
+        type: str
+      redpanda_console_schema_registry_url:
+        description: Schema Registry URL; empty hides it.
+        type: str
+      redpanda_console_kafka_connect_url:
+        description: Kafka Connect REST URL; empty hides the Connect pages.
+        type: str
+      redpanda_console_login_user:
+        description: nginx basic auth user.
+        type: str
+      redpanda_console_login_password:
+        description: nginx basic auth password (vault).
+        type: str
+        no_log: true
+      redpanda_console_htpasswd_salt:
+        description: Salt of the htpasswd hash, fixed per cluster.
+        type: str

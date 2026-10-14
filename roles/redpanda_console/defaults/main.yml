@@ -1,0 +1,28 @@
+---
+# Redpanda Console behind nginx with a password (basic auth). Console can
+# create SCRAM users, topics and ACLs, which Kafka UI cannot. Its own login
+# is a Redpanda Enterprise feature, so nginx guards it; whoever knows the
+# password is a cluster admin. Meant for TEST.
+redpanda_console_enabled: false
+redpanda_console_image: "{{ container_registry | default('docker.io') }}/redpandadata/console:v3.12.0"
+redpanda_console_nginx_image: "{{ container_registry | default('docker.io') }}/library/nginx:1.30.5-alpine"
+redpanda_console_project_dir: /opt/redpanda-console
+# Published by nginx; Console itself is reachable only inside the compose network
+redpanda_console_port: 8090
+
+# Kafka connection: CLIENT listener, SCRAM-SHA-512 over TLS. The account
+# needs All on topics, groups, transactional IDs and the cluster (creating
+# SCRAM users and ACLs is a cluster Alter).
+redpanda_console_bootstrap_servers: "{{ kafka_bootstrap_servers }}"
+redpanda_console_kafka_user: redpanda-console
+redpanda_console_kafka_password: ""
+redpanda_console_ca_file: /etc/kafka-services/ca.pem
+# Empty hides the Schema Registry / Kafka Connect pages
+redpanda_console_schema_registry_url: ""
+redpanda_console_kafka_connect_url: ""
+
+# nginx basic auth in front of Console
+redpanda_console_login_user: admin
+redpanda_console_login_password: ""
+# Fixed per cluster, so the htpasswd hash is the same on every run
+redpanda_console_htpasswd_salt: "{{ (((kafka_cluster_id | default('kafka')) ~ '-redpanda-console') | hash('sha256'))[:16] }}"

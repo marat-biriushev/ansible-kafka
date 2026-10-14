@@ -1,0 +1,7 @@
+---
+# config.yml, nginx.conf and htpasswd are bind mounts: compose does not see
+# their content change, so restart the containers.
+- name: Restart redpanda-console
+  ansible.builtin.command:
+    argv: [docker, compose, --ansi, never, --project-directory, "{{ redpanda_console_project_dir }}", restart]
+  changed_when: true

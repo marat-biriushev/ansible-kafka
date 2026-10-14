@@ -11,5 +11,6 @@
     - schema_registry
     - kafka_connect
     - kafka_ui
+    - redpanda_console
     - kafka_exporter
     - kafka_canary

@@ -11,7 +11,7 @@ Scope of this repository:
 
 * **In:** Kafka itself, TLS stores, SCRAM service accounts and their ACLs,
   service topics, JMX exporter, node_exporter, Schema Registry / Kafka
-  Connect / Kafka UI / kafka-exporter / canary in Docker, rolling restart,
+  Connect / Kafka UI / Redpanda Console (TEST) / kafka-exporter / canary in Docker, rolling restart,
   monitoring rules.
 * **Out, done by hand:** everything at OS level (data disk, time sync,
   sysctl, firewall, SELinux, Java and other packages), see
@@ -76,6 +76,7 @@ roles/
   schema_registry            Docker compose
   kafka_connect              Docker compose, plugins from artifacts/connect-plugins/
   kafka_ui                   Docker compose
+  redpanda_console           Docker compose, behind nginx basic auth (TEST)
   kafka_exporter             Docker compose
   kafka_canary               Docker compose
 monitoring/
@@ -175,6 +176,7 @@ firewalld stays on. Open:
 | 9091/tcp, 9093/tcp | the other two kafka nodes only | kafka01-03 |
 | 7071/tcp, 9100/tcp | monitoring (vmagent) | all hosts |
 | 8081/tcp (Schema Registry), 8080/tcp (Kafka UI) | clients / users | kafkasvc01 |
+| 8090/tcp (Redpanda Console via nginx, TEST only) | developers | kafkasvc01 |
 | 8083/tcp (Kafka Connect REST, no authentication) | operators only; Kafka UI runs on the same host | kafkasvc01 |
 | 7071/tcp, 7072/tcp (Schema Registry, Connect JMX exporter) | monitoring | kafkasvc01 |
 | 9308/tcp (kafka-exporter), 8082/tcp (canary) | monitoring | kafkasvc01 |
@@ -387,11 +389,15 @@ From the repository root (so `ansible.cfg` is used), TEST as example.
    curl -s localhost:7071/metrics | grep activecontrollercount
    ```
 
-   On kafkasvc01: `docker ps` shows five healthy containers;
+   On kafkasvc01: `docker ps` shows the service containers healthy
+   (on TEST: schema-registry, kafka-connect, kafka-ui, redpanda-console,
+   redpanda-console-nginx, kafka-exporter; the canary is off);
    `curl -s localhost:8081/subjects` returns `[]`;
    `curl -s localhost:8083/` returns the Connect version and the cluster ID;
    Kafka UI opens on `http://int-res-test-kafkasvc01.ipa.ipotekabank.uz:8080`
-   and shows the cluster, Schema Registry and Kafka Connect.
+   and shows the cluster, Schema Registry and Kafka Connect; on TEST
+   `curl -s -o /dev/null -w '%{http_code}' localhost:8090/` returns 401
+   (Redpanda Console asks for the nginx password).
 
 3. Run `site.yml` again: it must end with `changed=0` everywhere.
 
@@ -577,6 +583,7 @@ Choices not fixed by the task, taken from its defaults or made here:
 | Truststore for services | PEM CA file (`ssl.truststore.type=PEM`), no stores on kafkasvc01 |
 | Schema Registry metrics | JMX exporter javaagent in the container on 7071 |
 | Kafka UI | full rights (owner's decision): not read-only, All ACLs on topics, groups, transactional IDs and the cluster; Schema Registry and Kafka Connect pages enabled |
+| Redpanda Console (TEST) | v3.12.0 behind nginx basic auth on 8090: creates SCRAM users, topics and ACLs (Kafka UI cannot create users); Console's own login is Enterprise-only |
 | Kafka Connect | `apache/kafka:4.3.1` image (`connect-distributed.sh`), one worker, JSON converters, env and file config providers for secrets, client overrides allowed so each integration can use its own account |
 | Canary ACLs | plus Describe on the cluster (the canary describes it to size its topic) |
 | ACL changes | added, never removed automatically |
@@ -594,6 +601,8 @@ Choices not fixed by the task, taken from its defaults or made here:
   from the cluster.
 * Kafka UI with `LOGIN_FORM` is one shared password with full admin rights
   on the cluster. Use OAUTH2/LDAP (and Kafka UI RBAC) on PROD.
+* Redpanda Console (TEST) is the same: one nginx password, full admin;
+  users, topics and ACLs made there are not in git.
 * Kafka Connect: one worker, so a restart of kafkasvc01 stops all
   connectors until it is back. Its REST API (8083) has no
   authentication. Plugins removed from `kafka_connect_plugins` are not
