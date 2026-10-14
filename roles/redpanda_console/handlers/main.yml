@@ -1,5 +1,5 @@
 ---
-# config.yml, nginx.conf and htpasswd are bind mounts: compose does not see
+# config.yml, nginx.conf, auth.js and secrets.js are bind mounts: compose does not see
 # their content change, so restart the containers.
 - name: Restart redpanda-console
   ansible.builtin.command:

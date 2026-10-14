@@ -1,7 +1,7 @@
 ---
 argument_specs:
   main:
-    short_description: Redpanda Console in Docker (compose) behind nginx basic auth
+    short_description: Redpanda Console in Docker (compose) behind an nginx login form
     options:
       redpanda_console_enabled:
         description: Deploy Redpanda Console on this host.
@@ -39,12 +39,15 @@ argument_specs:
         description: Kafka Connect REST URL; empty hides the Connect pages.
         type: str
       redpanda_console_login_user:
-        description: nginx basic auth user.
+        description: Login form user.
         type: str
       redpanda_console_login_password:
-        description: nginx basic auth password (vault).
+        description: Login form password (vault).
         type: str
         no_log: true
-      redpanda_console_htpasswd_salt:
-        description: Salt of the htpasswd hash, fixed per cluster.
+      redpanda_console_session_hours:
+        description: Session cookie lifetime in hours.
+        type: int
+      redpanda_console_login_salt:
+        description: Salt of the password hash, fixed per cluster.
         type: str

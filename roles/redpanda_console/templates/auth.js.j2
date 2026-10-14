@@ -1,0 +1,110 @@
+// {{ ansible_managed }}
+// Login form and session cookie for nginx (njs). The cookie is
+// "<expiry>.<hmac-sha256(key, user|expiry)>".
+import secrets from 'secrets.js';
+import qs from 'querystring';
+import crypto from 'crypto';
+
+const COOKIE = 'rpc_session';
+
+function sign(expiry) {
+    return crypto.createHmac('sha256', secrets.key).update(secrets.user + '|' + expiry).digest('hex');
+}
+
+function sameString(a, b) {
+    if (a.length !== b.length) {
+        return false;
+    }
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) {
+        diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return diff === 0;
+}
+
+function validSession(r) {
+    const value = r.variables['cookie_' + COOKIE] || '';
+    const parts = value.split('.');
+    if (parts.length !== 2) {
+        return false;
+    }
+    const expiry = parseInt(parts[0], 10);
+    if (!(expiry > Date.now() / 1000)) {
+        return false;
+    }
+    return sameString(parts[1], sign(parts[0]));
+}
+
+// Only same-site paths, so the form cannot redirect anywhere else
+function safeNext(next) {
+    if (typeof next !== 'string' || next[0] !== '/' || next[1] === '/' || next[1] === '\\') {
+        return '/';
+    }
+    return next;
+}
+
+function escape(s) {
+    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function page(r, status, next, error) {
+    r.headersOut['Content-Type'] = 'text/html; charset=utf-8';
+    r.headersOut['Cache-Control'] = 'no-store';
+    r.return(status, `<!doctype html>
+<html><head><meta charset="utf-8"><title>Redpanda Console</title>
+<style>
+body{font-family:sans-serif;background:#f4f4f5;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}
+form{background:#fff;padding:2rem;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.15);width:18rem}
+h1{font-size:1.2rem;margin:0 0 1rem}input{width:100%;box-sizing:border-box;margin:.3rem 0 .8rem;padding:.5rem}
+button{width:100%;padding:.6rem;background:#e14226;color:#fff;border:0;border-radius:4px;cursor:pointer}
+.e{color:#c00;margin-bottom:.8rem}
+</style></head><body>
+<form method="post" action="/login">
+<h1>Redpanda Console</h1>
+${error ? '<div class="e">' + error + '</div>' : ''}
+<input type="hidden" name="next" value="${escape(next)}">
+<label>User<input name="user" autocomplete="username" autofocus></label>
+<label>Password<input name="password" type="password" autocomplete="current-password"></label>
+<button type="submit">Sign in</button>
+</form></body></html>`);
+}
+
+function login(r) {
+    if (r.method !== 'POST') {
+        if (validSession(r)) {
+            r.return(302, safeNext(r.args.next));
+            return;
+        }
+        page(r, 200, safeNext(r.args.next), '');
+        return;
+    }
+    const form = qs.parse(r.requestText || '');
+    const next = safeNext(form.next);
+    const user = String(form.user || '');
+    const hash = crypto.createHash('sha256').update(secrets.salt + String(form.password || '')).digest('hex');
+    if (!sameString(user, secrets.user) || !sameString(hash, secrets.hash)) {
+        r.warn('redpanda-console login failed for user "' + user + '"');
+        page(r, 401, next, 'Wrong user or password');
+        return;
+    }
+    const expiry = String(Math.floor(Date.now() / 1000) + secrets.ttl);
+    r.headersOut['Set-Cookie'] = COOKIE + '=' + expiry + '.' + sign(expiry) +
+        '; Path=/; HttpOnly; SameSite=Lax; Max-Age=' + secrets.ttl;
+    r.return(302, next);
+}
+
+function logout(r) {
+    r.headersOut['Set-Cookie'] = COOKIE + '=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
+    r.return(302, '/login');
+}
+
+// Not logged in: to the form, remembering where the user wanted to go
+function redirect(r) {
+    r.return(302, '/login?next=' + encodeURIComponent(r.variables.request_uri));
+}
+
+function check(r) {
+    r.return(validSession(r) ? 204 : 401);
+}
+
+export default { login, logout, check, redirect };

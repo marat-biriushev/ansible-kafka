@@ -25,8 +25,9 @@ services:
     ports:
       - "{{ redpanda_console_port }}:8080"
     volumes:
-      - "{{ redpanda_console_project_dir }}/nginx.conf:/etc/nginx/conf.d/default.conf:ro"
-      - "{{ redpanda_console_project_dir }}/htpasswd:/etc/nginx/htpasswd:ro"
+      - "{{ redpanda_console_project_dir }}/nginx.conf:/etc/nginx/nginx.conf:ro"
+      - "{{ redpanda_console_project_dir }}/auth.js:/etc/nginx/njs/auth.js:ro"
+      - "{{ redpanda_console_project_dir }}/secrets.js:/etc/nginx/njs/secrets.js:ro"
     depends_on:
       console:
         condition: service_healthy

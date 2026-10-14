@@ -110,7 +110,7 @@ kafka_topics_list:
 kafka_ui_auth_type: LOGIN_FORM
 kafka_ui_schema_registry_url: "http://{{ groups['kafka_services'][0] }}.{{ kafka_domain }}:8081"
 kafka_ui_kafka_connect_url: "http://{{ groups['kafka_services'][0] }}.{{ kafka_domain }}:8083"
-# Redpanda Console on :8090 behind nginx basic auth: developers create SCRAM
+# Redpanda Console on :8090 behind an nginx login form: developers create SCRAM
 # users, topics and ACLs there. TEST only.
 redpanda_console_enabled: true
 redpanda_console_schema_registry_url: "{{ kafka_ui_schema_registry_url }}"

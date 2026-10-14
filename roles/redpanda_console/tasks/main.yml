@@ -10,6 +10,7 @@
           - redpanda_console_kafka_password is not search('[\\s"$#\\\\]')
           - redpanda_console_login_user is match('^[A-Za-z0-9._-]+$')
           - redpanda_console_login_password | length >= 12
+          - redpanda_console_session_hours | int > 0
         fail_msg: >-
           redpanda_console_bootstrap_servers must be set; redpanda_console_kafka_password and
           redpanda_console_login_password come from the vault (12+ characters, the Kafka one without
@@ -25,25 +26,14 @@
         group: root
         mode: "0750"
 
-    # SHA-512 crypt with a fixed salt: same password, same file, no change
-    - name: Hash the login password
-      ansible.builtin.command:
-        argv: [openssl, passwd, "-6", -salt, "{{ redpanda_console_htpasswd_salt }}", -stdin]
-        stdin: "{{ redpanda_console_login_password }}"
-      register: redpanda_console_login_hash
-      changed_when: false
-      check_mode: false
-      no_log: true
-
-    # Read by the nginx worker (uid 101) through the bind mount; the
-    # project directory itself is root-only
-    - name: Deploy the htpasswd file
-      ansible.builtin.copy:
-        dest: "{{ redpanda_console_project_dir }}/htpasswd"
-        content: "{{ redpanda_console_login_user }}:{{ redpanda_console_login_hash.stdout }}\n"
+    # Password hash and cookie key; read by the nginx master (root) only
+    - name: Deploy the login secrets
+      ansible.builtin.template:
+        src: secrets.js.j2
+        dest: "{{ redpanda_console_project_dir }}/secrets.js"
         owner: root
         group: root
-        mode: "0644"
+        mode: "0600"
       no_log: true
       notify: Restart redpanda-console
 
@@ -57,7 +47,7 @@
       register: redpanda_console_secrets
       no_log: true
 
-    - name: Deploy the Console and nginx configs
+    - name: Deploy the Console config, nginx config and login form
       ansible.builtin.template:
         src: "{{ item }}.j2"
         dest: "{{ redpanda_console_project_dir }}/{{ item }}"
@@ -67,6 +57,7 @@
       loop:
         - config.yml
         - nginx.conf
+        - auth.js
       notify: Restart redpanda-console
 
     - name: Deploy compose.yml

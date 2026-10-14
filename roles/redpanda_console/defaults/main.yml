@@ -1,7 +1,8 @@
 ---
-# Redpanda Console behind nginx with a password (basic auth). Console can
-# create SCRAM users, topics and ACLs, which Kafka UI cannot. Its own login
-# is a Redpanda Enterprise feature, so nginx guards it; whoever knows the
+# Redpanda Console behind nginx with a login form. Console can create SCRAM
+# users, topics and ACLs, which Kafka UI cannot. Its own login is a Redpanda
+# Enterprise feature, so nginx guards it (form + session cookie in njs; not
+# HTTP Basic, which the bank's browser policy blocks). Whoever knows the
 # password is a cluster admin. Meant for TEST.
 redpanda_console_enabled: false
 redpanda_console_image: "{{ container_registry | default('docker.io') }}/redpandadata/console:v3.12.0"
@@ -21,8 +22,9 @@ redpanda_console_ca_file: /etc/kafka-services/ca.pem
 redpanda_console_schema_registry_url: ""
 redpanda_console_kafka_connect_url: ""
 
-# nginx basic auth in front of Console
+# Login form in front of Console
 redpanda_console_login_user: admin
 redpanda_console_login_password: ""
-# Fixed per cluster, so the htpasswd hash is the same on every run
-redpanda_console_htpasswd_salt: "{{ (((kafka_cluster_id | default('kafka')) ~ '-redpanda-console') | hash('sha256'))[:16] }}"
+redpanda_console_session_hours: 12
+# Fixed per cluster, so the password hash is the same on every run
+redpanda_console_login_salt: "{{ (((kafka_cluster_id | default('kafka')) ~ '-redpanda-console') | hash('sha256'))[:16] }}"
