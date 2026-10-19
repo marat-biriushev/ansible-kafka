@@ -6,8 +6,9 @@
 # With kafka_tls_selfsigned the role generates all of them there itself.
 kafka_tls_source_dir: "{{ playbook_dir }}/../certs"
 
-# TEST only: generate a private CA and node certificates with openssl on the
-# control node, so the stand comes up without a request to the bank CA.
+# Generate a private CA and node certificates with openssl on the control
+# node, so the cluster comes up without a request to the bank CA. Each
+# environment gets its own CA (its own kafka_tls_source_dir).
 kafka_tls_selfsigned: false
 kafka_tls_selfsigned_ca_cn: "Kafka TEST CA"
 kafka_tls_selfsigned_ca_days: 3650
@@ -16,8 +17,6 @@ kafka_tls_selfsigned_cert_days: 730
 kafka_tls_selfsigned_renew_days: 30
 # openssl (3.0+) on the control node, used for the self-signed certificates
 kafka_tls_openssl: openssl
-# Environment name, used to refuse self-signed certificates on prod
-kafka_tls_env: "{{ kafka_env | default('') }}"
 
 # Inventory groups: brokers get keystore + truststore, clients get the CA only
 kafka_tls_broker_group: kafka

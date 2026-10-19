@@ -4,13 +4,6 @@
 # not care where they came from. A certificate is (re)issued when it is
 # missing or expires within kafka_tls_selfsigned_renew_days; delete a .crt
 # to reissue it earlier (for example after changing the SANs).
-- name: Refuse self-signed certificates outside TEST
-  ansible.builtin.assert:
-    that: kafka_tls_env != 'prod'
-    fail_msg: kafka_tls_selfsigned is for TEST only. PROD uses certificates from the bank CA.
-    quiet: true
-  run_once: true
-
 - name: Create the certificate directory
   ansible.builtin.file:
     path: "{{ kafka_tls_source_dir }}"

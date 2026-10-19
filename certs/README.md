@@ -5,8 +5,8 @@ node. Everything here except this file is git-ignored.
 
 ```
 certs/test/          # generated on the first run while kafka_tls_selfsigned: true
-certs/prod/
-  ca.pem                          bank CA chain (all certificates, PEM)
+certs/prod/          # the same on PROD; with a bank CA instead:
+  ca.pem                          CA chain (all certificates, PEM)
   int-res-prod-kafka01.crt        broker certificate, PEM
   int-res-prod-kafka01.key        its private key, PEM, unencrypted, chmod 600
   int-res-prod-kafka02.crt / .key
@@ -14,4 +14,5 @@ certs/prod/
 ```
 
 What to request from the CA (SANs, key usage): see the main README,
-section "Certificates". Keep the directory `chmod 700`.
+section "Certificates". Keep the directory `chmod 700`; with self-signed
+certificates `ca.key` is here too: back it up, never send it anywhere.

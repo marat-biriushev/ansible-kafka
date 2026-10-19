@@ -72,7 +72,7 @@ kafka_users_acls:
   - { principal: "User:kafka-connect", resource_type: topic, name: connect-, pattern_type: prefixed, operations: [All] }
   - { principal: "User:kafka-connect", resource_type: group, name: connect-, pattern_type: prefixed, operations: [All] }
   - { principal: "User:kafka-connect", resource_type: cluster, operations: [Describe, DescribeConfigs] }
-  # Redpanda Console (TEST only): creates SCRAM users, topics and ACLs
+  # Redpanda Console: creates SCRAM users, topics and ACLs
   - { principal: "User:redpanda-console", resource_type: topic, name: "*", operations: [All] }
   - { principal: "User:redpanda-console", resource_type: group, name: "*", operations: [All] }
   - { principal: "User:redpanda-console", resource_type: transactional-id, name: "*", operations: [All] }
@@ -111,7 +111,7 @@ kafka_ui_auth_type: LOGIN_FORM
 kafka_ui_schema_registry_url: "http://{{ groups['kafka_services'][0] }}.{{ kafka_domain }}:8081"
 kafka_ui_kafka_connect_url: "http://{{ groups['kafka_services'][0] }}.{{ kafka_domain }}:8083"
 # Redpanda Console on :8090 behind an nginx login form: developers create SCRAM
-# users, topics and ACLs there. TEST only.
+# users, topics and ACLs there.
 redpanda_console_enabled: true
 redpanda_console_schema_registry_url: "{{ kafka_ui_schema_registry_url }}"
 redpanda_console_kafka_connect_url: "{{ kafka_ui_kafka_connect_url }}"

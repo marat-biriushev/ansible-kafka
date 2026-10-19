@@ -3,7 +3,7 @@
 # users, topics and ACLs, which Kafka UI cannot. Its own login is a Redpanda
 # Enterprise feature, so nginx guards it (form + session cookie in njs; not
 # HTTP Basic, which the bank's browser policy blocks). Whoever knows the
-# password is a cluster admin. Meant for TEST.
+# password is a cluster admin.
 redpanda_console_enabled: false
 redpanda_console_image: "{{ container_registry | default('docker.io') }}/redpandadata/console:v3.12.0"
 redpanda_console_nginx_image: "{{ container_registry | default('docker.io') }}/library/nginx:1.30.5-alpine"

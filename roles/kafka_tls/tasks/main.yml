@@ -1,5 +1,5 @@
 ---
-- name: Generate the self-signed TEST certificates
+- name: Generate the self-signed certificates
   ansible.builtin.include_tasks: selfsigned.yml
   when: kafka_tls_selfsigned
 

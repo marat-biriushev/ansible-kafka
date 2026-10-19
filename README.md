@@ -11,7 +11,7 @@ Scope of this repository:
 
 * **In:** Kafka itself, TLS stores, SCRAM service accounts and their ACLs,
   service topics, JMX exporter, node_exporter, Schema Registry / Kafka
-  Connect / Kafka UI / Redpanda Console (TEST) / kafka-exporter / canary in Docker, rolling restart,
+  Connect / Kafka UI / Redpanda Console / kafka-exporter / canary in Docker, rolling restart,
   monitoring rules.
 * **Out, done by hand:** everything at OS level (data disk, time sync,
   sysctl, firewall, SELinux, Java and other packages), see
@@ -67,7 +67,7 @@ playbooks/
   services.yml               services VM
   rolling-restart.yml        one node at a time, controller last
 roles/
-  kafka_tls                  PEM -> PKCS12 stores; CA for clients; self-signed TEST CA
+  kafka_tls                  PEM -> PKCS12 stores; CA for clients; self-signed CA
   kafka_jmx_exporter         javaagent jar + rules
   kafka                      install, configure, format once, start, wait
   node_exporter              node_exporter under systemd
@@ -76,7 +76,7 @@ roles/
   schema_registry            Docker compose
   kafka_connect              Docker compose, plugins from artifacts/connect-plugins/
   kafka_ui                   Docker compose
-  redpanda_console           Docker compose, behind an nginx login form (TEST)
+  redpanda_console           Docker compose, behind an nginx login form
   kafka_exporter             Docker compose
   kafka_canary               Docker compose
 monitoring/
@@ -176,7 +176,7 @@ firewalld stays on. Open:
 | 9091/tcp, 9093/tcp | the other two kafka nodes only | kafka01-03 |
 | 7071/tcp, 9100/tcp | monitoring (vmagent) | all hosts |
 | 8081/tcp (Schema Registry), 8080/tcp (Kafka UI) | clients / users | kafkasvc01 |
-| 8090/tcp (Redpanda Console via nginx, TEST only) | developers | kafkasvc01 |
+| 8090/tcp (Redpanda Console via nginx) | developers | kafkasvc01 |
 | 8083/tcp (Kafka Connect REST, no authentication) | operators only; Kafka UI runs on the same host | kafkasvc01 |
 | 7071/tcp, 7072/tcp (Schema Registry, Connect JMX exporter) | monitoring | kafkasvc01 |
 | 9308/tcp (kafka-exporter), 8082/tcp (canary) | monitoring | kafkasvc01 |
@@ -219,7 +219,7 @@ carries them before the first run:
 | `firewalld` | all | firewall |
 | `python3` | all | Ansible modules (in the base OS) |
 | `docker-ce`, `docker-compose-plugin` | kafkasvc01 | installed by the `docker` role from ansible-ib |
-| `openssl` (3.0+) | control node | generates the self-signed TEST CA and certificates |
+| `openssl` (3.0+) | control node | generates the self-signed CAs and certificates |
 
 ```bash
 dnf install -y java-21-openjdk-headless openssl
@@ -327,11 +327,16 @@ The CN must be the FQDN: it becomes the broker's principal and is listed
 in `super.users`. The kafkasvc01 host needs no certificate, only `ca.pem`
 (the services authenticate with SCRAM).
 
-On TEST `kafka_tls_selfsigned: true` (already set in
-`inventories/test/group_vars/all/main.yml`) generates a CA and the three
-certificates with the same names into `certs/test/` on the first run.
-Clients then need `certs/test/ca.pem`. Set it to `false` and put CA files
-there when TEST moves to the bank CA. PROD refuses self-signed mode.
+TEST and PROD both run with `kafka_tls_selfsigned: true` (owner's
+decision; set in each `inventories/<env>/group_vars/all/main.yml`): the
+first run generates a CA ("Kafka TEST CA" / "Kafka PROD CA") and the three
+certificates with the same names into `certs/<env>/`. Each environment has
+its own CA, so a TEST certificate is not trusted by PROD. Clients need
+`certs/<env>/ca.pem`; `ca.key` never leaves the control node (back it up
+with the vault). To move to the bank CA later: set `false`, put the bank
+files into `certs/<env>/` and run `playbooks/kafka.yml` (the truststores are
+rebuilt and the brokers restarted one by one); clients must trust the new
+CA before that.
 
 Rotation: replace the files in `certs/<env>/` and run
 `playbooks/kafka.yml`; the stores are rebuilt and the brokers restarted
@@ -360,7 +365,7 @@ lookups; the roles do not change. Tasks that handle passwords have
 From the repository root (so `ansible.cfg` is used), TEST as example.
 
 0. OS preparation done, artifacts verified, IDs
-   and vault filled in, certificates in place (or self-signed on TEST).
+   and vault filled in, certificates in place (or self-signed, generated on the first run).
    Check reachability:
 
    ```bash
@@ -583,7 +588,7 @@ Choices not fixed by the task, taken from its defaults or made here:
 | Truststore for services | PEM CA file (`ssl.truststore.type=PEM`), no stores on kafkasvc01 |
 | Schema Registry metrics | JMX exporter javaagent in the container on 7071 |
 | Kafka UI | full rights (owner's decision): not read-only, All ACLs on topics, groups, transactional IDs and the cluster; Schema Registry and Kafka Connect pages enabled |
-| Redpanda Console (TEST) | v3.12.0 behind an nginx login form (njs, not HTTP Basic: blocked by the browser policy) on 8090: creates SCRAM users, topics and ACLs (Kafka UI cannot create users); Console's own login is Enterprise-only |
+| Redpanda Console | TEST and PROD (owner's decision), v3.12.0 behind an nginx login form (njs, not HTTP Basic: blocked by the browser policy) on 8090: creates SCRAM users, topics and ACLs (Kafka UI cannot create users); Console's own login is Enterprise-only |
 | Kafka Connect | `apache/kafka:4.3.1` image (`connect-distributed.sh`), one worker, JSON converters, env and file config providers for secrets, client overrides allowed so each integration can use its own account |
 | Canary ACLs | plus Describe on the cluster (the canary describes it to size its topic) |
 | ACL changes | added, never removed automatically |
@@ -601,7 +606,7 @@ Choices not fixed by the task, taken from its defaults or made here:
   from the cluster.
 * Kafka UI with `LOGIN_FORM` is one shared password with full admin rights
   on the cluster. Use OAUTH2/LDAP (and Kafka UI RBAC) on PROD.
-* Redpanda Console (TEST) is the same: one shared password, full admin;
+* Redpanda Console is the same: one shared password, full admin;
   users, topics and ACLs made there are not in git.
 * Kafka Connect: one worker, so a restart of kafkasvc01 stops all
   connectors until it is back. Its REST API (8083) has no

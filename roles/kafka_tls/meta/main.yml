@@ -1,7 +1,7 @@
 ---
 galaxy_info:
   author: ipotekabank DevOps
-  description: PKCS12 keystore/truststore for the brokers from PEM files; CA file for clients; optional self-signed TEST CA
+  description: PKCS12 keystore/truststore for the brokers from PEM files; CA file for clients; optional self-signed CA
   license: proprietary
   min_ansible_version: "2.15"
   platforms:

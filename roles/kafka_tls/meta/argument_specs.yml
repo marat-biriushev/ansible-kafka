@@ -9,7 +9,7 @@ argument_specs:
         description: Directory on the control node with ca.pem, <host>.crt, <host>.key.
         type: str
       kafka_tls_selfsigned:
-        description: TEST only. Generate a CA and node certificates into kafka_tls_source_dir.
+        description: Generate a CA and node certificates into kafka_tls_source_dir.
         type: bool
       kafka_tls_selfsigned_ca_cn:
         description: CN of the self-signed CA.
@@ -25,9 +25,6 @@ argument_specs:
         type: int
       kafka_tls_openssl:
         description: openssl binary on the control node (3.0+) for the self-signed certificates.
-        type: str
-      kafka_tls_env:
-        description: Environment name; self-signed mode refuses "prod".
         type: str
       kafka_tls_broker_group:
         description: Group that gets keystore and truststore.

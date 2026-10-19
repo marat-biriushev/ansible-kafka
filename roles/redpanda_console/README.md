@@ -3,7 +3,7 @@
 Redpanda Console as a Docker compose project in `/opt/redpanda-console/`,
 behind an nginx login form, port 8090. Kafka over SASL_SSL /
 SCRAM-SHA-512 with the `redpanda-console` account. Off by default
-(`redpanda_console_enabled`); enabled on TEST.
+(`redpanda_console_enabled`); enabled on TEST and PROD.
 
 Why it is here next to Kafka UI: Console can create **SCRAM users with
 passwords**, topics and ACLs, so a developer can set up everything an
@@ -33,7 +33,7 @@ A new password changes the cookie key too, which logs everybody out.
   `redpanda-console` account has All on topics, groups, transactional IDs
   and the cluster (creating SCRAM users and ACLs is a cluster Alter).
 * One shared password, no per-person rights. Users, topics and ACLs made
-  in Console are not in git, so this is for TEST, not PROD.
+  in Console are not in git. Enabled on TEST and PROD (owner's decision).
 * Telemetry to Redpanda is off (`analytics.enabled: false`).
 
 Files: `config.yml` (Console, no secrets), `secrets.env` (0600,

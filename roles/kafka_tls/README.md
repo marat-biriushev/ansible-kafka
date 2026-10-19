@@ -19,8 +19,8 @@ owner `kafka`, keys and stores `0600`. The keystore is built with
 when it is missing, or when it no longer opens with the vault password
 (password rotation); a rebuild marks the broker for a rolling restart.
 
-`kafka_tls_selfsigned: true` (TEST only, refused when `kafka_env` is
-`prod`) generates a CA and node certificates with plain `openssl` (3.0+) on
+`kafka_tls_selfsigned: true` (used on TEST and PROD, each with its own CA)
+generates a CA and node certificates with plain `openssl` (3.0+) on
 the control node into the same directory, with the same SANs and
 `extendedKeyUsage = serverAuth, clientAuth`. No Ansible collection is
 needed. A node certificate is reissued when it is missing or expires within
@@ -41,13 +41,12 @@ All of them are in `defaults/main.yml` and validated by `meta/argument_specs.yml
 | Variable | Default | Description |
 |---|---|---|
 | `kafka_tls_source_dir` | `{{ playbook_dir }}/../certs` | Directory on the control node with ca.pem, <host>.crt, <host>.key. |
-| `kafka_tls_selfsigned` | `false` | TEST only. Generate a CA and node certificates into kafka_tls_source_dir. |
+| `kafka_tls_selfsigned` | `false` | Generate a CA and node certificates into kafka_tls_source_dir. |
 | `kafka_tls_selfsigned_ca_cn` | `Kafka TEST CA` | CN of the self-signed CA. |
 | `kafka_tls_selfsigned_ca_days` | `3650` | Validity of the self-signed CA. |
 | `kafka_tls_selfsigned_cert_days` | `730` | Validity of self-signed node certificates. |
 | `kafka_tls_selfsigned_renew_days` | `30` | Reissue a self-signed node certificate when it expires within this many days. |
 | `kafka_tls_openssl` | `openssl` | openssl binary on the control node (3.0+) for the self-signed certificates. |
-| `kafka_tls_env` | `{{ kafka_env \| default('') }}` | Environment name; self-signed mode refuses "prod". |
 | `kafka_tls_broker_group` | `kafka` | Group that gets keystore and truststore. |
 | `kafka_tls_client_group` | `kafka_services` | Group that gets only the CA file. |
 | `kafka_tls_domain` | `{{ kafka_domain \| default('') }}` | DNS domain for the certificate names. |
