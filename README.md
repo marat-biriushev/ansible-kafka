@@ -437,6 +437,16 @@ The source database side (a replication slot and publication for
 Debezium on PostgreSQL, LogMiner / supplemental logging on Oracle, a
 read-only user...) is set up by the DBAs.
 
+Installed: **Debezium Oracle connector 3.7.0.Final** (`debezium-connector-oracle`,
+class `io.debezium.connector.oracle.OracleConnector`), enabled on TEST. Its
+plugin archive ships the Oracle JDBC driver `ojdbc11-23.26.1.0.0.jar` (the
+version Debezium is built and tested with, identical to the Maven Central
+jar), so the driver is not a separate artifact. Checked with Connect 4.3.1:
+the plugin loads and the connector's config validation reaches the Oracle
+driver (`ORA-17868` for an unknown host). A connector also needs a topic for
+its schema history (`schema.history.internal.kafka.topic`) and Kafka access
+for it; give the connector its own SCRAM account and ACLs per integration.
+
 ## Playbooks
 
 | Command | What |

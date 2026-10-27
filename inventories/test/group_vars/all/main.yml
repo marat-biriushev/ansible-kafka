@@ -119,5 +119,6 @@ redpanda_console_kafka_connect_url: "{{ kafka_ui_kafka_connect_url }}"
 kafka_canary_enabled: false
 
 # Kafka Connect plugins from artifacts/connect-plugins/, pinned in
-# artifacts.yml (connect_plugins). Empty until the database connector is chosen.
-kafka_connect_plugins: []
+# artifacts.yml (connect_plugins).
+kafka_connect_plugins:
+  - name: debezium-connector-oracle

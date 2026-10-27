@@ -33,7 +33,16 @@ artifacts:
 #    file: debezium-connector-postgres-<version>-plugin.tar.gz
 #    url: https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/<version>/debezium-connector-postgres-<version>-plugin.tar.gz
 #    sha256: <sha256 of the file>
-connect_plugins: []
+connect_plugins:
+  # Oracle CDC (LogMiner). Built against Kafka 4.3.1; the archive already
+  # contains the Oracle JDBC driver ojdbc11-23.26.1.0.0.jar (byte-identical
+  # to com.oracle.database.jdbc:ojdbc11:23.26.1.0.0 on Maven Central), so no
+  # separate driver jar is installed.
+  - name: debezium-connector-oracle
+    version: "3.7.0.Final"
+    file: debezium-connector-oracle-3.7.0.Final-plugin.tar.gz
+    url: https://repo1.maven.org/maven2/io/debezium/debezium-connector-oracle/3.7.0.Final/debezium-connector-oracle-3.7.0.Final-plugin.tar.gz
+    sha256: 6bad8c366498f46b09112c14f5573e523de20d230a24bc880a65488d1f35e5a2
 
 # Optional: OpenJDK 21 headless with dependencies, only when the internal dnf
 # repository does not carry it. Fetched with "dnf download --resolve" on a

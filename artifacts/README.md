@@ -14,6 +14,7 @@ Expected content (versions from `artifacts.yml`):
 kafka_2.13-4.3.1.tgz
 jmx_prometheus_javaagent-1.7.0.jar
 node_exporter-1.12.1.linux-amd64.tar.gz
+connect-plugins/debezium-connector-oracle-3.7.0.Final-plugin.tar.gz
 rpms/                  # optional, fetch-artifacts.sh --with-java
 SHA256SUMS
 ```
