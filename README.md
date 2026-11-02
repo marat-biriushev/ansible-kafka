@@ -438,7 +438,7 @@ Debezium on PostgreSQL, LogMiner / supplemental logging on Oracle, a
 read-only user...) is set up by the DBAs.
 
 Installed: **Debezium Oracle connector 3.7.0.Final** (`debezium-connector-oracle`,
-class `io.debezium.connector.oracle.OracleConnector`), enabled on TEST. Its
+class `io.debezium.connector.oracle.OracleConnector`), enabled on TEST and PROD. Its
 plugin archive ships the Oracle JDBC driver `ojdbc11-23.26.1.0.0.jar` (the
 version Debezium is built and tested with, identical to the Maven Central
 jar), so the driver is not a separate artifact. Checked with Connect 4.3.1:
