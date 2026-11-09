@@ -122,3 +122,4 @@ kafka_canary_enabled: false
 # artifacts.yml (connect_plugins).
 kafka_connect_plugins:
   - name: debezium-connector-oracle
+  - name: kafka-connect-jdbc

@@ -446,6 +446,19 @@ the plugin loads and the connector's config validation reaches the Oracle
 driver (`ORA-17868` for an unknown host). A connector also needs a topic for
 its schema history (`schema.history.internal.kafka.topic`) and Kafka access
 for it; give the connector its own SCRAM account and ACLs per integration.
+Debezium supports Oracle 12c and later: the current 11g databases are
+served once they move to 19c.
+
+Installed: **Confluent JDBC connector 10.9.9** (`kafka-connect-jdbc`,
+`io.confluent.connect.jdbc.JdbcSourceConnector` and `JdbcSinkConnector`,
+Confluent Community License), enabled on TEST. Its archive ships the
+drivers: Oracle ojdbc8 19.7.0.0 (works with Oracle 11.2 to 21c, so with the
+current 11g and the planned 19c), PostgreSQL 42.7.12, MS SQL 12.8.2, jTDS and
+SQLite. No MySQL/MariaDB/Db2 driver. Do not add a second Oracle driver to
+the plugin directory: two ojdbc jars conflict. The archive is a zip, so
+kafkasvc01 needs `unzip` (`dnf install -y unzip`). Checked with Connect
+4.3.1: both connectors load, and config validation reaches the Oracle,
+PostgreSQL and MS SQL drivers (a MySQL URL gets "No suitable driver").
 
 ## Playbooks
 

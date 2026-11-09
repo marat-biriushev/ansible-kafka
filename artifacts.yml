@@ -43,6 +43,15 @@ connect_plugins:
     file: debezium-connector-oracle-3.7.0.Final-plugin.tar.gz
     url: https://repo1.maven.org/maven2/io/debezium/debezium-connector-oracle/3.7.0.Final/debezium-connector-oracle-3.7.0.Final-plugin.tar.gz
     sha256: 6bad8c366498f46b09112c14f5573e523de20d230a24bc880a65488d1f35e5a2
+  # JDBC source and sink (Confluent Community License). Bundles the drivers
+  # for Oracle (ojdbc8 19.7.0.0: Oracle 11.2 to 21c, so both the current 11g
+  # and the planned 19c), PostgreSQL 42.7.12, MS SQL 12.8.2, jTDS and SQLite.
+  # A zip: the services VM needs unzip.
+  - name: kafka-connect-jdbc
+    version: "10.9.9"
+    file: confluentinc-kafka-connect-jdbc-10.9.9.zip
+    url: https://hub-downloads.confluent.io/api/plugins/confluentinc/kafka-connect-jdbc/versions/10.9.9/confluentinc-kafka-connect-jdbc-10.9.9.zip
+    sha256: 6b9b479b2c99f7dafa1053d4a3ffa19d7421d4322ead7071cabee1c55f923308
 
 # Optional: OpenJDK 21 headless with dependencies, only when the internal dnf
 # repository does not carry it. Fetched with "dnf download --resolve" on a
