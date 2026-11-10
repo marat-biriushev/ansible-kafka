@@ -42,7 +42,6 @@
         "sort": 1,
         "multi": false,
         "includeAll": false,
-        "allValue": null,
         "current": {}
       },
       {
@@ -156,8 +155,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
+                "color": "red"
               },
               {
                 "color": "orange",
@@ -219,8 +217,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
+                "color": "red"
               },
               {
                 "color": "green",
@@ -282,8 +279,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -341,8 +337,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -400,8 +395,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "orange",
@@ -459,8 +453,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -518,8 +511,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
-                "value": null
+                "color": "blue"
               }
             ]
           }
@@ -573,8 +565,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
-                "value": null
+                "color": "blue"
               }
             ]
           }
@@ -628,8 +619,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
-                "value": null
+                "color": "blue"
               }
             ]
           }
@@ -683,8 +673,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
-                "value": null
+                "color": "blue"
               }
             ]
           }
@@ -738,8 +727,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
-                "value": null
+                "color": "blue"
               }
             ]
           }
@@ -793,8 +781,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
+                "color": "red"
               },
               {
                 "color": "orange",
@@ -841,14 +828,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -909,14 +896,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "Bps",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -966,14 +953,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1036,14 +1023,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1093,14 +1080,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1150,14 +1137,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "ms",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1207,14 +1194,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "ms",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1264,14 +1251,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1332,14 +1319,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1400,14 +1387,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1457,14 +1444,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1525,14 +1512,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1582,14 +1569,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1639,14 +1626,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1696,14 +1683,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1753,14 +1740,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1810,14 +1797,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1867,14 +1854,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "ms",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1937,14 +1924,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -1994,14 +1981,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "Bps",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -2256,14 +2243,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -2313,14 +2300,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -2526,8 +2513,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
+                "color": "red"
               },
               {
                 "color": "green",
@@ -2585,8 +2571,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
-                "value": null
+                "color": "blue"
               }
             ]
           }
@@ -2640,8 +2625,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2699,8 +2683,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2947,14 +2930,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -3004,14 +2987,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -3074,14 +3057,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -3131,14 +3114,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -3188,14 +3171,14 @@
       "fieldConfig": {
         "defaults": {
           "unit": "Bps",
-          "min": 0,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
             "stacking": {
               "mode": "none"
             }
-          }
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -3245,7 +3228,6 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
-          "min": null,
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,

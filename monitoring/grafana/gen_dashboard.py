@@ -1,6 +1,7 @@
 """Generate monitoring/grafana/kafka-integration-resilience.json:
 
-    python3 monitoring/grafana/gen_dashboard.py monitoring/grafana/kafka-integration-resilience.json
+    python3 monitoring/grafana/gen_dashboard.py monitoring/grafana/kafka-integration-resilience.json \
+        monitoring/grafana/kafka-integration-resilience.resource.json
 """
 import json
 import sys
@@ -62,9 +63,10 @@ def ts(title, targets, unit="short", w=12, x=0, desc="", stack=False, min0=True)
     place({
         "type": "timeseries", "title": title, "description": desc,
         "targets": [dict(t, refId=chr(65 + i)) for i, t in enumerate(targets)],
-        "fieldConfig": {"defaults": {"unit": unit, "min": 0 if min0 else None,
-                                     "custom": {"lineWidth": 1, "fillOpacity": 10,
-                                                "stacking": {"mode": "normal" if stack else "none"}}},
+        "fieldConfig": {"defaults": dict({"unit": unit,
+                                          "custom": {"lineWidth": 1, "fillOpacity": 10,
+                                                     "stacking": {"mode": "normal" if stack else "none"}}},
+                                         **({"min": 0} if min0 else {})),
                         "overrides": []},
         "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]},
                     "tooltip": {"mode": "multi", "sort": "desc"}},
@@ -251,5 +253,23 @@ dashboard = {
     ]},
     "panels": panels,
 }
+
+
+def drop_nulls(value):
+    """Grafana 12's resource validation rejects null where it expects a type."""
+    if isinstance(value, dict):
+        return {k: drop_nulls(v) for k, v in value.items() if v is not None}
+    if isinstance(value, list):
+        return [drop_nulls(v) for v in value]
+    return value
+
+
+dashboard = drop_nulls(dashboard)
 json.dump(dashboard, open(sys.argv[1], "w"), indent=2)
+# The same dashboard as a Grafana 12 resource (apiVersion/kind/metadata/spec),
+# for editors and APIs that expect that form instead of the classic model
+if len(sys.argv) > 2:
+    spec = {k: v for k, v in dashboard.items() if k != "uid"}
+    json.dump({"apiVersion": "dashboard.grafana.app/v1beta1", "kind": "Dashboard",
+               "metadata": {"name": dashboard["uid"]}, "spec": spec}, open(sys.argv[2], "w"), indent=2)
 print(len([p for p in panels if p["type"] != "row"]), "panels")
