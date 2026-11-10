@@ -208,8 +208,10 @@ table("Failed tasks per connector", f'sum by (connector) (kafka_connect_worker_c
 y[0] += 8
 ts("Record errors", [target(f'sum by (connector) (increase(kafka_connect_task_error_total_record_errors{{{CON}}}[10m]))', "{{connector}}")],
    "short", 12, 0, "Records that failed conversion or transforms in the last 10 minutes.")
-ts("Records read by sink tasks", [target(f'sum by (connector) (kafka_connect_sink_task_sink_record_read_rate{{{CON}}})', "{{connector}}")],
-   "ops", 12, 12)
+ts("Records per connector", [
+    target(f'sum by (connector) (kafka_connect_source_task_source_record_write_rate{{{CON}}})', "source {{connector}} (to Kafka)"),
+    target(f'sum by (connector) (kafka_connect_sink_task_sink_record_read_rate{{{CON}}})', "sink {{connector}} (from Kafka)"),
+], "ops", 12, 12, "Source connectors: records written to Kafka per second. Sink connectors: records read from Kafka per second.")
 y[0] += 8
 
 # --- Client errors ----------------------------------------------------------

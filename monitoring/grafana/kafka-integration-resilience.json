@@ -2969,17 +2969,28 @@
     },
     {
       "type": "timeseries",
-      "title": "Records read by sink tasks",
-      "description": "",
+      "title": "Records per connector",
+      "description": "Source connectors: records written to Kafka per second. Sink connectors: records read from Kafka per second.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (connector) (kafka_connect_sink_task_sink_record_read_rate{job=~\"int-res-.+-kafka-connect\", cluster=\"$cluster\"})",
-          "legendFormat": "{{connector}}",
+          "expr": "sum by (connector) (kafka_connect_source_task_source_record_write_rate{job=~\"int-res-.+-kafka-connect\", cluster=\"$cluster\"})",
+          "legendFormat": "source {{connector}} (to Kafka)",
           "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (connector) (kafka_connect_sink_task_sink_record_read_rate{job=~\"int-res-.+-kafka-connect\", cluster=\"$cluster\"})",
+          "legendFormat": "sink {{connector}} (from Kafka)",
+          "refId": "B",
           "range": true,
           "instant": false
         }
