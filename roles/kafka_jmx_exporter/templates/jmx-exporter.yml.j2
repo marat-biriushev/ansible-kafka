@@ -13,6 +13,8 @@ excludeObjectNames:
   # One series per partition and client; too many for the TSDB
   - "kafka.log:type=Log,name=LogStartOffset,*"
   - "kafka.log:type=Log,name=LogEndOffset,*"
+  - "kafka.log:type=Log,name=NumLogSegments,*"
+  - "kafka.log:type=Log,name=RetentionSizeInPercent,*"
   - "kafka.server:type=FetcherLagMetrics,*"
 rules:
   # KRaft quorum: kafka.server:type=raft-metrics, attributes like current-leader
@@ -51,15 +53,43 @@ rules:
     name: kafka_server_kafkarequesthandlerpool_requesthandleravgidlepercent
     type: GAUGE
 
+  # Replica fetcher lag (messages) behind the leaders, per fetcher type
+  - pattern: "kafka.server<type=(ReplicaFetcherManager|ReplicaAlterLogDirsManager), name=(.+), clientId=(.+)><>Value"
+    name: kafka_server_$1_$2
+    type: GAUGE
+    labels:
+      clientid: "$3"
+
+  # Requests waiting in the purgatories (Produce acks=all, Fetch long-poll...)
+  - pattern: "kafka.server<type=DelayedOperationPurgatory, name=(.+), delayedOperation=(.+)><>Value"
+    name: kafka_server_delayedoperationpurgatory_$1
+    type: GAUGE
+    labels:
+      operation: "$2"
+  # Finalized feature levels (metadata.version...), for upgrades
+  - pattern: "kafka.server<type=MetadataLoader, name=FinalizedLevel, featureName=(.+)><>Value"
+    name: kafka_server_metadataloader_finalizedlevel
+    type: GAUGE
+    labels:
+      feature: "$1"
+
   # Plain gauges: kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions etc.
-  - pattern: "kafka.server<type=(.+), name=(.+)><>Value"
+  # [^,]+ keeps MBeans with more keys out: those would put the key values
+  # (topic, partition, broker...) into the metric name.
+  - pattern: "kafka.server<type=([^,]+), name=([^,]+)><>Value"
     name: kafka_server_$1_$2
     type: GAUGE
 
   # Controller: OfflinePartitionsCount, ActiveControllerCount, FencedBrokerCount...
-  - pattern: "kafka.controller<type=(.+), name=(.+)><>Value"
+  - pattern: "kafka.controller<type=([^,]+), name=([^,]+)><>Value"
     name: kafka_controller_$1_$2
     type: GAUGE
+  # Per broker, seen by the active controller (TimeSinceLastHeartbeatReceivedMs...)
+  - pattern: "kafka.controller<type=([^,]+), name=([^,]+), broker=(.+)><>Value"
+    name: kafka_controller_$1_$2
+    type: GAUGE
+    labels:
+      broker: "$3"
 
   # Network: request rates and latencies per request type
   - pattern: "kafka.network<type=RequestMetrics, name=RequestsPerSec, request=(.+), version=(.+)><>Count"
@@ -74,9 +104,15 @@ rules:
     labels:
       request: "$2"
       quantile: "0.$3"
-  - pattern: "kafka.network<type=(.+), name=(.+)><>Value"
+  - pattern: "kafka.network<type=([^,]+), name=([^,]+)><>Value"
     name: kafka_network_$1_$2
     type: GAUGE
+  # Network processor threads: IdlePercent, ResponseQueueSize per processor
+  - pattern: "kafka.network<type=([^,]+), name=([^,]+), (?:networkProcessor|processor)=(.+)><>Value"
+    name: kafka_network_$1_$2
+    type: GAUGE
+    labels:
+      processor: "$3"
 
   # Log: per-partition size, and log flush rate
   - pattern: "kafka.log<type=Log, name=Size, topic=(.+), partition=(.+)><>Value"
@@ -88,9 +124,15 @@ rules:
   - pattern: "kafka.log<type=LogFlushStats, name=LogFlushRateAndTimeMs><>Count"
     name: kafka_log_flushes_total
     type: COUNTER
-  - pattern: "kafka.log<type=(.+), name=(.+)><>Value"
+  - pattern: "kafka.log<type=([^,]+), name=([^,]+)><>Value"
     name: kafka_log_$1_$2
     type: GAUGE
+  # Per log directory: LogDirectoryOffline (disk failure), uncleanable bytes...
+  - pattern: "kafka.log<type=([^,]+), name=([^,]+), logDirectory=\"?([^\"]+)\"?><>Value"
+    name: kafka_log_$1_$2
+    type: GAUGE
+    labels:
+      logdir: "$3"
 
   # JVM
   - pattern: "java.lang<type=Memory><HeapMemoryUsage>(used|max|committed)"

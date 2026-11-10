@@ -55,6 +55,9 @@
     mode: "0644"
   notify: Kafka restart required
 
+# No restart: the javaagent rereads its rules file when it changes
+# (jmx_config_reload_success_total counts it), so a rules change is live
+# within one scrape. Only a new jar needs the broker restarted.
 - name: Deploy the exporter rules
   ansible.builtin.template:
     src: jmx-exporter.yml.j2
@@ -62,4 +65,3 @@
     owner: root
     group: "{{ kafka_jmx_exporter_group }}"
     mode: "0640"
-  notify: Kafka restart required

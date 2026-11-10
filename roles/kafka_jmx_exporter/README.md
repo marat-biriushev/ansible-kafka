@@ -8,8 +8,20 @@ variables of both roles equal (the defaults are).
 
 The rules export `kafka.server` (including `type=raft-metrics`),
 `kafka.controller`, `kafka.network`, `kafka.log` and JVM memory/GC. The
-metric names used by `monitoring/kafka-alerts.yml` were checked against a
-running Kafka 4.3.1 with this exact rules file:
+metric names used by `monitoring/kafka-alerts.yml` and the Grafana
+dashboard were checked against a running 3-node Kafka 4.3.1 with this
+exact rules file.
+
+Per-partition and per-key MBeans never put their keys into the metric
+name (that would make one metric name per topic partition): the generic
+rules only match MBeans without extra keys, per-partition log metrics other
+than `Size` are not collected, and the useful keyed ones carry labels
+(`processor`, `broker`, `clientid`, `operation`, `feature`, `logdir`). A
+3-topic test cluster exports about 170 metric names instead of 380.
+
+A rules change needs no broker restart: the javaagent rereads the file
+when it changes (`jmx_config_reload_success_total`). Only a new jar marks
+the broker for the rolling restart.
 
 | Metric | Source MBean |
 |---|---|
