@@ -75,13 +75,18 @@ def table(title, expr, w=12, x=0, desc="", h=8, value_name="Value", unit="short"
     place({
         "type": "table", "title": title, "description": desc,
         "targets": [target(expr, instant=True, fmt="table")],
-        "transformations": [{"id": "organize", "options": {"excludeByName": {"Time": True}, "renameByName": {"Value": value_name}}}],
+        "transformations": [{"id": "organize", "options": {"excludeByName": {"Time": True, "__name__": True, "instance": True, "job": True, "cluster": True, "node": True}, "renameByName": {"Value": value_name}}}],
         "fieldConfig": {"defaults": {"unit": unit, "mappings": mappings or []}, "overrides": []},
         "options": {"showHeader": True, "sortBy": [{"displayName": value_name, "desc": True}]},
     }, w, h, x)
 
 
 RED0 = [("green", None), ("red", 1)]
+# Same as the kafka:produce_success_ratio:rate5m recording rule, inline so the
+# dashboard works whether or not kafka-alerts.yml is loaded
+PRODUCE_OK = (f'1 - sum(rate(kafka_server_brokertopicmetrics_failedproducerequests_total{{{J}, topic=""}}[5m]))'
+              f' / clamp_min(sum(rate(kafka_server_brokertopicmetrics_totalproducerequests_total{{{J}, topic=""}}[5m])), 1e-9)')
+LAG_BY = f'sum by (consumergroup, topic) (kafka_consumergroup_lag{{{LAG}, consumergroup=~"$consumergroup"}})'
 ONE = [("red", None), ("green", 1), ("red", 2)]
 
 # --- Overview ---------------------------------------------------------------
@@ -100,7 +105,7 @@ stats([
     ("Messages in", f'sum(rate(kafka_server_brokertopicmetrics_messagesin_total{{{J}, topic=""}}[5m]))', "ops", [("blue", None)], "Messages per second, all topics."),
     ("Bytes in", f'sum(rate(kafka_server_brokertopicmetrics_bytesin_total{{{J}, topic=""}}[5m]))', "Bps", [("blue", None)], ""),
     ("Bytes out", f'sum(rate(kafka_server_brokertopicmetrics_bytesout_total{{{J}, topic=""}}[5m]))', "Bps", [("blue", None)], ""),
-    ("Produce success", 'kafka:produce_success_ratio:rate5m{cluster="$cluster"}', "percentunit", [("red", None), ("orange", 0.99), ("green", 0.999)], "SLI: share of successful produce requests (5 min)."),
+    ("Produce success", PRODUCE_OK, "percentunit", [("red", None), ("orange", 0.99), ("green", 0.999)], "SLI: share of successful produce requests (5 min)."),
 ])
 ts("Messages in per broker", [target(f'sum by (node) (rate(kafka_server_brokertopicmetrics_messagesin_total{{{JN}, topic=""}}[5m]))', "{{node}}")], "ops", 12, 0)
 ts("Bytes in / out per broker", [
@@ -174,13 +179,13 @@ y[0] += 8
 
 # --- Consumer groups --------------------------------------------------------
 row("Consumer groups and lag")
-ts("Lag per group and topic", [target('kafka:consumergroup_lag:sum{cluster="$cluster", consumergroup=~"$consumergroup"}', "{{consumergroup}} / {{topic}}")],
+ts("Lag per group and topic", [target(LAG_BY, "{{consumergroup}} / {{topic}}")],
    "short", 12, 0, "Messages not yet consumed. Growing for 15 min: critical alert.")
 ts("Consumption rate per group", [target(f'sum by (consumergroup) (rate(kafka_consumergroup_current_offset_sum{{{LAG}, consumergroup=~"$consumergroup"}}[5m]))', "{{consumergroup}}")],
    "ops", 12, 12, "Committed messages per second.")
 y[0] += 8
-table("Lag now", f'sort_desc(kafka:consumergroup_lag:sum{{cluster="$cluster", consumergroup=~"$consumergroup"}})', 12, 0, value_name="Lag")
-table("Members per group", f'kafka_consumergroup_members{{{LAG}, consumergroup=~"$consumergroup"}}', 12, 12,
+table("Lag now", f'sort_desc({LAG_BY})', 12, 0, value_name="Lag")
+table("Members per group", f'sum by (consumergroup) (kafka_consumergroup_members{{{LAG}, consumergroup=~"$consumergroup"}})', 12, 12,
       "0 members with lag: the consumer is stopped.", value_name="Members")
 y[0] += 8
 
@@ -214,7 +219,7 @@ ts("Failed fetch requests per topic", [target(f'sum by (topic) (rate(kafka_serve
 y[0] += 8
 ts("Rejected bytes per topic (message too large)", [target(f'sum by (topic) (rate(kafka_server_brokertopicmetrics_bytesrejected_total{{{J}, topic=~"$topic", topic!=""}}[5m])) > 0', "{{topic}}")],
    "Bps", 12, 0)
-ts("Produce success ratio", [target('kafka:produce_success_ratio:rate5m{cluster="$cluster"}', "{{cluster}}")],
+ts("Produce success ratio", [target(PRODUCE_OK, "produce success")],
    "percentunit", 12, 12, "SLI. Authorization denials are in /var/log/kafka/kafka-authorizer.log, not in metrics.", min0=False)
 y[0] += 8
 

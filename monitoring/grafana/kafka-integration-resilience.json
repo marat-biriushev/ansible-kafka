@@ -768,7 +768,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "kafka:produce_success_ratio:rate5m{cluster=\"$cluster\"}",
+          "expr": "1 - sum(rate(kafka_server_brokertopicmetrics_failedproducerequests_total{job=~\"int-res-.+-kafka-jmx\", cluster=\"$cluster\", topic=\"\"}[5m])) / clamp_min(sum(rate(kafka_server_brokertopicmetrics_totalproducerequests_total{job=~\"int-res-.+-kafka-jmx\", cluster=\"$cluster\", topic=\"\"}[5m])), 1e-9)",
           "legendFormat": "",
           "refId": "A",
           "range": false,
@@ -2054,7 +2054,12 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "cluster": true,
+              "node": true
             },
             "renameByName": {
               "Value": "Size"
@@ -2113,7 +2118,12 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "cluster": true,
+              "node": true
             },
             "renameByName": {
               "Value": "Partitions"
@@ -2172,7 +2182,12 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "cluster": true,
+              "node": true
             },
             "renameByName": {
               "Value": "Under-replicated"
@@ -2231,7 +2246,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "kafka:consumergroup_lag:sum{cluster=\"$cluster\", consumergroup=~\"$consumergroup\"}",
+          "expr": "sum by (consumergroup, topic) (kafka_consumergroup_lag{job=~\"int-res-.+-kafka-lag\", cluster=\"$cluster\", consumergroup=~\"$consumergroup\"})",
           "legendFormat": "{{consumergroup}} / {{topic}}",
           "refId": "A",
           "range": true,
@@ -2345,7 +2360,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sort_desc(kafka:consumergroup_lag:sum{cluster=\"$cluster\", consumergroup=~\"$consumergroup\"})",
+          "expr": "sort_desc(sum by (consumergroup, topic) (kafka_consumergroup_lag{job=~\"int-res-.+-kafka-lag\", cluster=\"$cluster\", consumergroup=~\"$consumergroup\"}))",
           "legendFormat": "",
           "refId": "A",
           "range": false,
@@ -2358,7 +2373,12 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "cluster": true,
+              "node": true
             },
             "renameByName": {
               "Value": "Lag"
@@ -2404,7 +2424,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "kafka_consumergroup_members{job=~\"int-res-.+-kafka-lag\", cluster=\"$cluster\", consumergroup=~\"$consumergroup\"}",
+          "expr": "sum by (consumergroup) (kafka_consumergroup_members{job=~\"int-res-.+-kafka-lag\", cluster=\"$cluster\", consumergroup=~\"$consumergroup\"})",
           "legendFormat": "",
           "refId": "A",
           "range": false,
@@ -2417,7 +2437,12 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "cluster": true,
+              "node": true
             },
             "renameByName": {
               "Value": "Members"
@@ -2721,7 +2746,12 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "cluster": true,
+              "node": true
             },
             "renameByName": {
               "Value": "State"
@@ -2792,7 +2822,12 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "cluster": true,
+              "node": true
             },
             "renameByName": {
               "Value": "Running"
@@ -2851,7 +2886,12 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "cluster": true,
+              "node": true
             },
             "renameByName": {
               "Value": "Failed"
@@ -3195,8 +3235,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "kafka:produce_success_ratio:rate5m{cluster=\"$cluster\"}",
-          "legendFormat": "{{cluster}}",
+          "expr": "1 - sum(rate(kafka_server_brokertopicmetrics_failedproducerequests_total{job=~\"int-res-.+-kafka-jmx\", cluster=\"$cluster\", topic=\"\"}[5m])) / clamp_min(sum(rate(kafka_server_brokertopicmetrics_totalproducerequests_total{job=~\"int-res-.+-kafka-jmx\", cluster=\"$cluster\", topic=\"\"}[5m])), 1e-9)",
+          "legendFormat": "produce success",
           "refId": "A",
           "range": true,
           "instant": false
