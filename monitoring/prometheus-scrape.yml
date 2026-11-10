@@ -1,0 +1,93 @@
+# scrape_configs entries as the monitoring team runs them (TEST and PROD).
+# kafka-alerts.yml selects on these job names (int-res-<env>-...) and uses
+# the cluster and node labels. All exporters serve /metrics over HTTP.
+---
+- job_name: int-res-prod-kafka-jmx
+  scrape_interval: 15s
+  metrics_path: /metrics
+  static_configs:
+    - targets: [172.31.60.111:7071]
+      labels: {cluster: int-res-prod-cluster, node: int-res-prod-kafka01}
+    - targets: [172.31.60.112:7071]
+      labels: {cluster: int-res-prod-cluster, node: int-res-prod-kafka02}
+    - targets: [172.31.60.113:7071]
+      labels: {cluster: int-res-prod-cluster, node: int-res-prod-kafka03}
+
+- job_name: int-res-prod-kafka-node
+  scrape_interval: 15s
+  metrics_path: /metrics
+  static_configs:
+    - targets: [172.31.60.111:9100]
+      labels: {cluster: int-res-prod-cluster, node: int-res-prod-kafka01}
+    - targets: [172.31.60.112:9100]
+      labels: {cluster: int-res-prod-cluster, node: int-res-prod-kafka02}
+    - targets: [172.31.60.113:9100]
+      labels: {cluster: int-res-prod-cluster, node: int-res-prod-kafka03}
+    - targets: [172.31.60.114:9100]
+      labels: {cluster: int-res-prod-cluster, node: int-res-prod-kafkasvc01}
+
+- job_name: int-res-prod-kafka-lag
+  scrape_interval: 15s
+  metrics_path: /metrics
+  static_configs:
+    - targets: [172.31.60.114:9308]
+      labels: {cluster: int-res-prod-cluster, node: int-res-prod-kafkasvc01}
+
+- job_name: int-res-prod-schema-registry
+  scrape_interval: 15s
+  metrics_path: /metrics
+  static_configs:
+    - targets: [172.31.60.114:7071]
+      labels: {cluster: int-res-prod-cluster, node: int-res-prod-kafkasvc01}
+
+- job_name: int-res-prod-kafka-connect
+  scrape_interval: 15s
+  metrics_path: /metrics
+  static_configs:
+    - targets: [172.31.60.114:7072]
+      labels: {cluster: int-res-prod-cluster, node: int-res-prod-kafkasvc01}
+
+- job_name: int-res-test-kafka-jmx
+  scrape_interval: 15s
+  metrics_path: /metrics
+  static_configs:
+    - targets: [172.31.56.211:7071]
+      labels: {cluster: int-res-test-cluster, node: int-res-test-kafka01}
+    - targets: [172.31.56.212:7071]
+      labels: {cluster: int-res-test-cluster, node: int-res-test-kafka02}
+    - targets: [172.31.56.213:7071]
+      labels: {cluster: int-res-test-cluster, node: int-res-test-kafka03}
+
+- job_name: int-res-test-kafka-node
+  scrape_interval: 15s
+  metrics_path: /metrics
+  static_configs:
+    - targets: [172.31.56.211:9100]
+      labels: {cluster: int-res-test-cluster, node: int-res-test-kafka01}
+    - targets: [172.31.56.212:9100]
+      labels: {cluster: int-res-test-cluster, node: int-res-test-kafka02}
+    - targets: [172.31.56.213:9100]
+      labels: {cluster: int-res-test-cluster, node: int-res-test-kafka03}
+    - targets: [172.31.56.214:9100]
+      labels: {cluster: int-res-test-cluster, node: int-res-test-kafkasvc01}
+
+- job_name: int-res-test-kafka-lag
+  scrape_interval: 15s
+  metrics_path: /metrics
+  static_configs:
+    - targets: [172.31.56.214:9308]
+      labels: {cluster: int-res-test-cluster, node: int-res-test-kafkasvc01}
+
+- job_name: int-res-test-schema-registry
+  scrape_interval: 15s
+  metrics_path: /metrics
+  static_configs:
+    - targets: [172.31.56.214:7071]
+      labels: {cluster: int-res-test-cluster, node: int-res-test-kafkasvc01}
+
+- job_name: int-res-test-kafka-connect
+  scrape_interval: 15s
+  metrics_path: /metrics
+  static_configs:
+    - targets: [172.31.56.214:7072]
+      labels: {cluster: int-res-test-cluster, node: int-res-test-kafkasvc01}

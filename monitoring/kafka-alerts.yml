@@ -1,162 +1,277 @@
-# vmalert / Prometheus rules. Metric names come from the JMX exporter rules
-# in roles/kafka_jmx_exporter/templates/jmx-exporter.yml.j2, node_exporter,
-# kafka-exporter and the canary. Job names match vmagent-scrape.yml.
+# Prometheus / vmalert rules for the Kafka clusters (TEST and PROD), matching
+# the monitoring team's scrape config (monitoring/prometheus-scrape.yml):
+# jobs int-res-<env>-kafka-jmx, -kafka-node, -kafka-lag, -schema-registry,
+# -kafka-connect; labels cluster (int-res-<env>-cluster) and node.
+# Metric names come from the JMX exporter rules in
+# roles/kafka_jmx_exporter/templates/jmx-exporter.yml.j2, node_exporter and
+# kafka-exporter. Thresholds follow section 8 of the TZ; they are starting
+# values, to be tuned on the baseline after go-live.
+# Runbooks: monitoring/RUNBOOK.md; runbook_url points at its copy in
+# Confluence (replace RUNBOOK_BASE_URL, see the README there).
+# Check: promtool check rules monitoring/kafka-alerts.yml
 ---
 groups:
+  # --- SLIs and helpers ---------------------------------------------------
+  - name: kafka-recording
+    rules:
+      # Share of successful produce requests over 5 minutes, per cluster
+      - record: kafka:produce_success_ratio:rate5m
+        expr: |
+          1 - (
+            sum by (cluster) (rate(kafka_server_brokertopicmetrics_failedproducerequests_total{job=~"int-res-.+-kafka-jmx", topic=""}[5m]))
+            /
+            clamp_min(sum by (cluster) (rate(kafka_server_brokertopicmetrics_totalproducerequests_total{job=~"int-res-.+-kafka-jmx", topic=""}[5m])), 1e-9)
+          )
+      # Broker-side p99 request time, ms (Produce, FetchConsumer), worst broker
+      - record: kafka:request_time_p99_ms:max
+        expr: |
+          max by (cluster, request) (
+            kafka_network_requestmetrics_total_time_ms{job=~"int-res-.+-kafka-jmx", request=~"Produce|FetchConsumer", quantile="0.99"}
+          )
+      # Consumer lag per group and topic
+      - record: kafka:consumergroup_lag:sum
+        expr: sum by (cluster, consumergroup, topic) (kafka_consumergroup_lag{job=~"int-res-.+-kafka-lag"})
+
+  # --- Cluster ------------------------------------------------------------
   - name: kafka-cluster
     rules:
       - alert: KafkaOfflinePartitions
-        expr: max by (cluster) (kafka_controller_kafkacontroller_offlinepartitionscount) > 0
+        expr: max by (cluster) (kafka_controller_kafkacontroller_offlinepartitionscount{job=~"int-res-.+-kafka-jmx"}) > 0
         for: 1m
         labels: {severity: critical}
         annotations:
-          summary: "{{ $labels.cluster }}: {{ $value }} offline partitions"
-          description: Partitions without a leader; producers and consumers of them are down.
+          summary: "{{ $labels.cluster }}: {{ $value }} partitions without a leader"
+          description: Writes and reads of these partitions have stopped.
+          runbook_url: RUNBOOK_BASE_URL#kafkaofflinepartitions
 
       - alert: KafkaActiveControllerCountNotOne
-        expr: sum by (cluster) (kafka_controller_kafkacontroller_activecontrollercount) != 1
+        expr: sum by (cluster) (kafka_controller_kafkacontroller_activecontrollercount{job=~"int-res-.+-kafka-jmx"}) != 1
         for: 1m
         labels: {severity: critical}
         annotations:
           summary: "{{ $labels.cluster }}: {{ $value }} active controllers (expected 1)"
+          description: No active controller, or split-brain.
+          runbook_url: RUNBOOK_BASE_URL#kafkaactivecontrollercountnotone
 
       - alert: KafkaUnderMinIsrPartitions
-        expr: sum by (cluster, instance) (kafka_server_replicamanager_underminisrpartitioncount) > 0
+        expr: sum by (cluster, node) (kafka_server_replicamanager_underminisrpartitioncount{job=~"int-res-.+-kafka-jmx"}) > 0
         for: 1m
         labels: {severity: critical}
         annotations:
-          summary: "{{ $labels.instance }}: {{ $value }} partitions below min.insync.replicas"
-          description: Writes with acks=all to these partitions fail.
+          summary: "{{ $labels.node }}: {{ $value }} partitions below min.insync.replicas"
+          description: Writes with acks=all to these partitions are rejected.
+          runbook_url: RUNBOOK_BASE_URL#kafkaunderminisrpartitions
 
       - alert: KafkaUnderReplicatedPartitions
-        expr: sum by (cluster, instance) (kafka_server_replicamanager_underreplicatedpartitions) > 0
-        for: 5m
+        expr: sum by (cluster, node) (kafka_server_replicamanager_underreplicatedpartitions{job=~"int-res-.+-kafka-jmx"}) > 0
+        for: 1m
         labels: {severity: warning}
         annotations:
-          summary: "{{ $labels.instance }}: {{ $value }} under-replicated partitions for 5 minutes"
+          summary: "{{ $labels.node }}: {{ $value }} under-replicated partitions"
+          description: Replicas are behind (normal for a minute or two during a restart).
+          runbook_url: RUNBOOK_BASE_URL#kafkaunderreplicatedpartitions
+
+      - alert: KafkaUnderReplicatedPartitionsLong
+        expr: sum by (cluster, node) (kafka_server_replicamanager_underreplicatedpartitions{job=~"int-res-.+-kafka-jmx"}) > 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.node }}: {{ $value }} under-replicated partitions for 5 minutes"
+          description: Replicas are not catching up; one more failure can lose availability.
+          runbook_url: RUNBOOK_BASE_URL#kafkaunderreplicatedpartitions
+
+      - alert: KafkaIsrFlapping
+        expr: |
+          sum by (cluster, node) (
+            increase(kafka_server_replicamanager_isrshrinks_total{job=~"int-res-.+-kafka-jmx"}[15m])
+            + increase(kafka_server_replicamanager_isrexpands_total{job=~"int-res-.+-kafka-jmx"}[15m])
+          ) > 10
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.node }}: {{ $value | humanize }} ISR shrinks/expands in 15 minutes"
+          description: Replicas keep dropping out of the ISR and coming back; unstable network or an overloaded broker.
+          runbook_url: RUNBOOK_BASE_URL#kafkaisrflapping
 
       - alert: KafkaFencedBrokers
-        expr: max by (cluster) (kafka_controller_kafkacontroller_fencedbrokercount) > 0
+        expr: max by (cluster) (kafka_controller_kafkacontroller_fencedbrokercount{job=~"int-res-.+-kafka-jmx"}) > 0
         for: 1m
         labels: {severity: critical}
         annotations:
           summary: "{{ $labels.cluster }}: {{ $value }} fenced brokers"
+          description: A broker is registered but fenced by the controller (lost its session or is stuck).
+          runbook_url: RUNBOOK_BASE_URL#kafkafencedbrokers
+
+      - alert: KafkaBrokerDown
+        expr: up{job=~"int-res-.+-kafka-jmx"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.node }}: Kafka broker/controller does not answer"
+          description: The JMX exporter runs inside the Kafka process, so this means Kafka is down (or port 7071 is blocked).
+          runbook_url: RUNBOOK_BASE_URL#kafkabrokerdown
 
       - alert: KafkaRequestHandlerIdleLow
-        expr: kafka_server_kafkarequesthandlerpool_requesthandleravgidlepercent < 0.2
+        expr: kafka_server_kafkarequesthandlerpool_requesthandleravgidlepercent{job=~"int-res-.+-kafka-jmx"} < 0.4
         for: 10m
         labels: {severity: warning}
         annotations:
-          summary: "{{ $labels.instance }}: request handlers idle {{ $value | humanizePercentage }}"
-          description: Request handler threads are saturated (idle below 20%).
+          summary: "{{ $labels.node }}: request handlers idle {{ $value | humanizePercentage }}"
+          description: The broker is getting busy (idle below 40%).
+          runbook_url: RUNBOOK_BASE_URL#kafkarequesthandleridlelow
 
-      - alert: KafkaJmxExporterDown
-        expr: up{job="kafka-jmx"} == 0
-        for: 2m
-        labels: {severity: critical}
-        annotations:
-          summary: "{{ $labels.instance }}: Kafka broker metrics unavailable (broker down?)"
-
-  - name: kafka-nodes
-    rules:
-      - alert: KafkaNodeDown
-        expr: up{job="node"} == 0
-        for: 2m
-        labels: {severity: critical}
-        annotations:
-          summary: "{{ $labels.instance }}: node_exporter unreachable"
-
-      - alert: KafkaDataDiskUsageHigh
-        expr: |
-          (1 - node_filesystem_avail_bytes{job="node", mountpoint="/data"}
-               / node_filesystem_size_bytes{job="node", mountpoint="/data"}) > 0.75
-        for: 10m
-        labels: {severity: warning}
-        annotations:
-          summary: "{{ $labels.instance }}: /data is {{ $value | humanizePercentage }} full"
-
-      - alert: KafkaDataDiskUsageCritical
-        expr: |
-          (1 - node_filesystem_avail_bytes{job="node", mountpoint="/data"}
-               / node_filesystem_size_bytes{job="node", mountpoint="/data"}) > 0.85
+      - alert: KafkaRequestHandlerIdleCritical
+        expr: kafka_server_kafkarequesthandlerpool_requesthandleravgidlepercent{job=~"int-res-.+-kafka-jmx"} < 0.2
         for: 5m
         labels: {severity: critical}
         annotations:
-          summary: "{{ $labels.instance }}: /data is {{ $value | humanizePercentage }} full"
+          summary: "{{ $labels.node }}: request handlers idle {{ $value | humanizePercentage }}"
+          description: The broker is overloaded (idle below 20%).
+          runbook_url: RUNBOOK_BASE_URL#kafkarequesthandleridlelow
 
-      # Written by the kafka_tls role into the node_exporter textfile directory
-      - alert: KafkaCertificateExpiresSoon
-        expr: (kafka_tls_certificate_not_after_seconds - time()) < 30 * 86400
-        labels: {severity: warning}
-        annotations:
-          summary: "{{ $labels.instance }}: broker certificate expires in {{ $value | humanizeDuration }}"
-
-      - alert: KafkaCertificateExpiresVerySoon
-        expr: (kafka_tls_certificate_not_after_seconds - time()) < 7 * 86400
-        labels: {severity: critical}
-        annotations:
-          summary: "{{ $labels.instance }}: broker certificate expires in {{ $value | humanizeDuration }}"
-
-  - name: kafka-clients
-    rules:
-      - alert: KafkaConsumerLagGrowing
+      # "Above the baseline x2": p99 now against its own 7-day average. The
+      # floor (50 ms Produce, 1000 ms Fetch, which long-polls up to 500 ms)
+      # keeps an idle cluster's tiny numbers from firing it.
+      - alert: KafkaRequestLatencyHigh
         expr: |
-          sum by (cluster, consumergroup, topic) (kafka_consumergroup_lag) > 0
-          and
-          deriv(sum by (cluster, consumergroup, topic) (kafka_consumergroup_lag)[15m:1m]) > 0
+          (
+            kafka:request_time_p99_ms:max
+            > 2 * avg_over_time(kafka:request_time_p99_ms:max[7d])
+          )
+          and on (cluster, request)
+          (
+            (kafka:request_time_p99_ms:max{request="Produce"} > 50)
+            or
+            (kafka:request_time_p99_ms:max{request="FetchConsumer"} > 1000)
+          )
         for: 15m
         labels: {severity: warning}
         annotations:
-          summary: "{{ $labels.consumergroup }} on {{ $labels.topic }}: lag keeps growing"
+          summary: "{{ $labels.cluster }}: {{ $labels.request }} p99 {{ $value | humanize }} ms, over twice the 7-day baseline"
+          runbook_url: RUNBOOK_BASE_URL#kafkarequestlatencyhigh
 
-      - alert: SchemaRegistryDown
-        expr: up{job="schema-registry"} == 0
-        for: 2m
-        labels: {severity: critical}
-        annotations:
-          summary: "{{ $labels.instance }}: Schema Registry unavailable"
-
-      - alert: KafkaConnectDown
-        expr: up{job="kafka-connect"} == 0
-        for: 2m
-        labels: {severity: critical}
-        annotations:
-          summary: "{{ $labels.instance }}: Kafka Connect worker unavailable"
-
-      # Names checked against Kafka Connect 4.3.1 with the kafka_connect rules
-      - alert: KafkaConnectTaskFailed
-        expr: kafka_connect_worker_connector_connector_failed_task_count > 0
-        for: 1m
-        labels: {severity: critical}
-        annotations:
-          summary: "connector {{ $labels.connector }}: {{ $value }} failed tasks"
-          description: "See GET /connectors/{{ $labels.connector }}/status for the trace; restart with POST .../restart?includeTasks=true."
-
-      - alert: KafkaConnectConnectorFailed
-        expr: kafka_connect_connector_status{status="failed"} == 1
-        for: 1m
-        labels: {severity: critical}
-        annotations:
-          summary: "connector {{ $labels.connector }} is FAILED"
-
-      - alert: KafkaConnectRecordErrors
-        expr: increase(kafka_connect_task_error_total_record_errors[10m]) > 0
+      - alert: KafkaProduceErrors
+        expr: kafka:produce_success_ratio:rate5m < 0.999
+        for: 10m
         labels: {severity: warning}
         annotations:
-          summary: "connector {{ $labels.connector }} task {{ $labels.task }}: record errors in the last 10 minutes"
+          summary: "{{ $labels.cluster }}: {{ $value | humanizePercentage }} of produce requests succeed"
+          runbook_url: RUNBOOK_BASE_URL#kafkaproduceerrors
+
+  # --- Hosts --------------------------------------------------------------
+  - name: kafka-nodes
+    rules:
+      - alert: KafkaNodeDown
+        expr: up{job=~"int-res-.+-kafka-node"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.node }}: host does not answer (node_exporter)"
+          runbook_url: RUNBOOK_BASE_URL#kafkanodedown
+
+      - alert: KafkaDataDiskUsageHigh
+        expr: |
+          (1 - node_filesystem_avail_bytes{job=~"int-res-.+-kafka-node", mountpoint="/data"}
+               / node_filesystem_size_bytes{job=~"int-res-.+-kafka-node", mountpoint="/data"}) > 0.75
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.node }}: /data is {{ $value | humanizePercentage }} full"
+          runbook_url: RUNBOOK_BASE_URL#kafkadatadiskusage
+
+      - alert: KafkaDataDiskUsageCritical
+        expr: |
+          (1 - node_filesystem_avail_bytes{job=~"int-res-.+-kafka-node", mountpoint="/data"}
+               / node_filesystem_size_bytes{job=~"int-res-.+-kafka-node", mountpoint="/data"}) > 0.85
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.node }}: /data is {{ $value | humanizePercentage }} full"
+          description: At 100% the broker stops.
+          runbook_url: RUNBOOK_BASE_URL#kafkadatadiskusage
+
+      # Written by the kafka_tls role into the node_exporter textfile directory
+      - alert: KafkaCertificateExpiresSoon
+        expr: (kafka_tls_certificate_not_after_seconds{job=~"int-res-.+-kafka-node"} - time()) < 30 * 86400
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.node }}: broker certificate expires in {{ $value | humanizeDuration }}"
+          runbook_url: RUNBOOK_BASE_URL#kafkacertificateexpires
+
+      - alert: KafkaCertificateExpiresVerySoon
+        expr: (kafka_tls_certificate_not_after_seconds{job=~"int-res-.+-kafka-node"} - time()) < 7 * 86400
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.node }}: broker certificate expires in {{ $value | humanizeDuration }}"
+          runbook_url: RUNBOOK_BASE_URL#kafkacertificateexpires
+
+  # --- Consumers and services ---------------------------------------------
+  - name: kafka-clients
+    rules:
+      # "Grows N minutes in a row": lag above zero and its 15-minute trend up
+      - alert: KafkaConsumerLagGrowing
+        expr: |
+          kafka:consumergroup_lag:sum > 0
+          and
+          deriv(kafka:consumergroup_lag:sum[15m]) > 0
+        for: 15m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.cluster }}: group {{ $labels.consumergroup }} on {{ $labels.topic }} keeps falling behind (lag {{ $value | humanize }})"
+          runbook_url: RUNBOOK_BASE_URL#kafkaconsumerlag
+
+      # "Above the SLO threshold": one starting value for all groups; give
+      # key groups their own rule once their SLO is agreed
+      - alert: KafkaConsumerLagHigh
+        expr: kafka:consumergroup_lag:sum > 10000
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.cluster }}: group {{ $labels.consumergroup }} on {{ $labels.topic }} lag {{ $value | humanize }} messages"
+          runbook_url: RUNBOOK_BASE_URL#kafkaconsumerlag
 
       - alert: KafkaExporterDown
-        expr: up{job="kafka-exporter"} == 0
+        expr: up{job=~"int-res-.+-kafka-lag"} == 0
         for: 5m
         labels: {severity: warning}
         annotations:
-          summary: "{{ $labels.instance }}: kafka-exporter unavailable, consumer lag is not monitored"
+          summary: "{{ $labels.node }}: kafka-exporter down, consumer lag is not monitored"
+          runbook_url: RUNBOOK_BASE_URL#kafkaexporterdown
 
-      - alert: KafkaCanaryErrors
-        expr: |
-          sum by (cluster) (rate(strimzi_canary_records_produced_failed_total[5m]))
-          + sum by (cluster) (rate(strimzi_canary_consumer_error_total[5m])) > 0
-        for: 5m
+      - alert: SchemaRegistryDown
+        expr: up{job=~"int-res-.+-schema-registry"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.cluster }}: Schema Registry does not answer"
+          runbook_url: RUNBOOK_BASE_URL#schemaregistrydown
+
+      - alert: KafkaConnectDown
+        expr: up{job=~"int-res-.+-kafka-connect"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.cluster }}: Kafka Connect worker does not answer"
+          runbook_url: RUNBOOK_BASE_URL#kafkaconnectdown
+
+      - alert: KafkaConnectConnectorFailed
+        expr: kafka_connect_connector_status{job=~"int-res-.+-kafka-connect", status="failed"} == 1
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.cluster }}: connector {{ $labels.connector }} is FAILED"
+          runbook_url: RUNBOOK_BASE_URL#kafkaconnectfailed
+
+      - alert: KafkaConnectTaskFailed
+        expr: kafka_connect_worker_connector_connector_failed_task_count{job=~"int-res-.+-kafka-connect"} > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.cluster }}: connector {{ $labels.connector }} has {{ $value }} failed tasks"
+          runbook_url: RUNBOOK_BASE_URL#kafkaconnectfailed
+
+      - alert: KafkaConnectRecordErrors
+        expr: increase(kafka_connect_task_error_total_record_errors{job=~"int-res-.+-kafka-connect"}[10m]) > 0
         labels: {severity: warning}
         annotations:
-          summary: "{{ $labels.cluster }}: canary produce/consume errors"
+          summary: "{{ $labels.cluster }}: connector {{ $labels.connector }} task {{ $labels.task }} had record errors in 10 minutes"
+          runbook_url: RUNBOOK_BASE_URL#kafkaconnectrecorderrors

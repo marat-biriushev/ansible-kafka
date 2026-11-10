@@ -80,8 +80,9 @@ roles/
   kafka_exporter             Docker compose
   kafka_canary               Docker compose
 monitoring/
-  vmagent-scrape.yml         scrape_configs fragment for the existing vmagent
-  kafka-alerts.yml           vmalert rules
+  prometheus-scrape.yml      scrape_configs as the monitoring team runs them
+  kafka-alerts.yml           Prometheus/vmalert rules (TZ section 8)
+  RUNBOOK.md                 one section per alert (runbook_url targets)
 molecule/default/            3-node scenario (developer machine)
 ```
 
@@ -542,18 +543,28 @@ reports all records sent and the output has no `ERROR` lines (retriable
 
 ## Monitoring
 
-* `monitoring/vmagent-scrape.yml`: jobs `kafka-jmx` (7071 on brokers),
-  `node` (9100, all hosts), `kafka-exporter` (9308), `schema-registry`
-  (7071 on kafkasvc01, JMX exporter in the container), `kafka-connect`
-  (7072), `kafka-canary` (8082). Targets are TEST; copy for PROD.
-* `monitoring/kafka-alerts.yml`: offline partitions, active controller
-  count != 1, under-min-ISR, under-replicated > 5 min, fenced brokers,
-  exporter / node down, `/data` > 75% / > 85%, growing consumer lag,
-  request handler idle < 20%, certificate expiry < 30 / < 7 days
-  (textfile metric from `kafka_tls`), Schema Registry down, Kafka Connect
-  down / failed connector or task / record errors, canary errors.
-  The Kafka metric names were checked against a running 4.3.1 broker
-  with the rules from `kafka_jmx_exporter`.
+* `monitoring/prometheus-scrape.yml`: the monitoring team's jobs, per
+  environment `int-res-<env>-kafka-jmx` (7071 on brokers), `-kafka-node`
+  (9100, all hosts), `-kafka-lag` (kafka-exporter, 9308), `-schema-registry`
+  (7071 on kafkasvc01), `-kafka-connect` (7072); labels `cluster`
+  (`int-res-<env>-cluster`) and `node`. Path `/metrics` everywhere.
+* `monitoring/kafka-alerts.yml` follows TZ section 8 (starting thresholds,
+  to be tuned on the baseline): offline partitions, active controllers != 1,
+  under-min-ISR (critical); under-replicated > 0 (warning) and > 0 for 5 min
+  (critical); ISR shrink/expand flapping; fenced brokers; broker and host
+  down; `/data` > 75% / > 85%; request handler idle < 40% / < 20%; Produce
+  and Fetch p99 over twice their 7-day average; produce success < 99.9%;
+  consumer lag growing for 15 min / above 10000; certificate expiry
+  < 30 / < 7 days (textfile metric from `kafka_tls`); Schema Registry,
+  Kafka Connect, kafka-exporter down; failed connectors/tasks and record
+  errors. Recording rules give the SLIs: `kafka:produce_success_ratio:rate5m`,
+  `kafka:request_time_p99_ms:max`, `kafka:consumergroup_lag:sum`.
+  Every alert has a `runbook_url` into `monitoring/RUNBOOK.md`; replace
+  `RUNBOOK_BASE_URL` once the runbook is in Confluence. Check the file with
+  `promtool check rules monitoring/kafka-alerts.yml`.
+* Not covered: MirrorMaker 2 lag and inter-DC latency (no MM2, one DC);
+  end-to-end p99 producer to consumer needs the canary, which is off until
+  Nexus proxies quay.io.
 * Kafka authorizer decisions go to `/var/log/kafka/kafka-authorizer.log`
   (denials at INFO) for shipping to the SIEM.
 
