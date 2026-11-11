@@ -83,6 +83,7 @@ monitoring/
   prometheus-scrape.yml      scrape_configs as the monitoring team runs them
   kafka-alerts.yml           Prometheus/vmalert rules (TZ section 8)
   RUNBOOK.md                 one section per alert (runbook_url targets)
+  RUNBOOK.confluence.txt     the same in Confluence wiki markup (md2confluence.py)
   grafana/                   dashboard JSON and its generator
 molecule/default/            3-node scenario (developer machine)
 ```
