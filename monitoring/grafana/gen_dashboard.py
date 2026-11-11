@@ -165,6 +165,37 @@ ts("KRaft: commit latency", [target(f'kafka_server_raft_metrics_commit_latency_a
    "ms", 12, 12)
 y[0] += 8
 
+# Broker TLS certificates: written by the kafka_tls role into the
+# node_exporter textfile directory (kafka_tls_certificate_not_after_seconds)
+CERT = f'kafka_tls_certificate_not_after_seconds{{{NODE}, node=~"$node"}}'
+place({
+    "type": "table", "title": "Broker certificates",
+    "description": "Broker TLS certificates. Orange under 30 days, red under 7 days (the alerts use the same limits). "
+                   "Renew with playbooks/kafka.yml.",
+    "targets": [dict(target(f'({CERT} - time()) / 86400', instant=True, fmt="table"), refId="A"),
+                dict(target(f'{CERT} * 1000', instant=True, fmt="table"), refId="B")],
+    "transformations": [
+        {"id": "merge", "options": {}},
+        {"id": "organize", "options": {
+            "excludeByName": {"Time": True, "__name__": True, "instance": True, "job": True, "cluster": True},
+            "indexByName": {"node": 0, "subject": 1, "Value #A": 2, "Value #B": 3},
+            "renameByName": {"node": "Broker", "subject": "Certificate", "Value #A": "Days left", "Value #B": "Expires"}}},
+    ],
+    "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+            {"matcher": {"id": "byName", "options": "Days left"}, "properties": [
+                {"id": "unit", "value": "none"}, {"id": "decimals", "value": 0},
+                {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                    {"color": "red", "value": None}, {"color": "orange", "value": 7}, {"color": "green", "value": 30}]}},
+                {"id": "custom.cellOptions", "value": {"type": "color-background"}}]},
+            {"matcher": {"id": "byName", "options": "Expires"}, "properties": [
+                {"id": "unit", "value": "dateTimeAsIso"}]},
+        ]},
+    "options": {"showHeader": True, "sortBy": [{"displayName": "Days left", "desc": False}]},
+}, 24, 6, 0)
+y[0] += 6
+
 # --- Topics -----------------------------------------------------------------
 row("Topics and partitions", collapsed=False)
 ts("Messages in per topic", [target(f'sum by (topic) (rate(kafka_server_brokertopicmetrics_messagesin_total{{{J}, topic=~"$topic", topic!=""}}[5m]))', "{{topic}}")],

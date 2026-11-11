@@ -1892,15 +1892,154 @@
       }
     },
     {
+      "type": "table",
+      "title": "Broker certificates",
+      "description": "Broker TLS certificates. Orange under 30 days, red under 7 days (the alerts use the same limits). Renew with playbooks/kafka.yml.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "(kafka_tls_certificate_not_after_seconds{job=~\"int-res-.+-kafka-node\", cluster=\"$cluster\", node=~\"$node\"} - time()) / 86400",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "kafka_tls_certificate_not_after_seconds{job=~\"int-res-.+-kafka-node\", cluster=\"$cluster\", node=~\"$node\"} * 1000",
+          "legendFormat": "",
+          "refId": "B",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "cluster": true
+            },
+            "indexByName": {
+              "node": 0,
+              "subject": 1,
+              "Value #A": 2,
+              "Value #B": 3
+            },
+            "renameByName": {
+              "node": "Broker",
+              "subject": "Certificate",
+              "Value #A": "Days left",
+              "Value #B": "Expires"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Days left"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red"
+                    },
+                    {
+                      "color": "orange",
+                      "value": 7
+                    },
+                    {
+                      "color": "green",
+                      "value": 30
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Expires"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Days left",
+            "desc": false
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 82
+      },
+      "id": 33,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
       "type": "row",
       "title": "Topics and partitions",
-      "id": 33,
+      "id": 34,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 82
+        "y": 88
       },
       "panels": []
     },
@@ -1953,9 +2092,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 83
+        "y": 89
       },
-      "id": 34,
+      "id": 35,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2010,9 +2149,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 83
+        "y": 89
       },
-      "id": 35,
+      "id": 36,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2074,9 +2213,9 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 91
+        "y": 97
       },
-      "id": 36,
+      "id": 37,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2138,9 +2277,9 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 91
+        "y": 97
       },
-      "id": 37,
+      "id": 38,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2202,9 +2341,9 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 91
+        "y": 97
       },
-      "id": 38,
+      "id": 39,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2213,13 +2352,13 @@
     {
       "type": "row",
       "title": "Consumer groups and lag",
-      "id": 39,
+      "id": 40,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 99
+        "y": 105
       },
       "panels": []
     },
@@ -2272,9 +2411,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 100
+        "y": 106
       },
-      "id": 40,
+      "id": 41,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2329,9 +2468,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 100
+        "y": 106
       },
-      "id": 41,
+      "id": 42,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2393,9 +2532,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 108
+        "y": 114
       },
-      "id": 42,
+      "id": 43,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2457,9 +2596,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 108
+        "y": 114
       },
-      "id": 43,
+      "id": 44,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2468,13 +2607,13 @@
     {
       "type": "row",
       "title": "Kafka Connect",
-      "id": 44,
+      "id": 45,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 116
+        "y": 122
       },
       "panels": []
     },
@@ -2528,9 +2667,9 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 117
+        "y": 123
       },
-      "id": 45,
+      "id": 46,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2582,9 +2721,9 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 117
+        "y": 123
       },
-      "id": 46,
+      "id": 47,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2640,9 +2779,9 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 117
+        "y": 123
       },
-      "id": 47,
+      "id": 48,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2698,9 +2837,9 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 117
+        "y": 123
       },
-      "id": 48,
+      "id": 49,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2774,9 +2913,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 121
+        "y": 127
       },
-      "id": 49,
+      "id": 50,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2838,9 +2977,9 @@
         "h": 8,
         "w": 6,
         "x": 12,
-        "y": 121
+        "y": 127
       },
-      "id": 50,
+      "id": 51,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2902,9 +3041,9 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 121
+        "y": 127
       },
-      "id": 51,
+      "id": 52,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2959,9 +3098,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 129
+        "y": 135
       },
-      "id": 52,
+      "id": 53,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -3027,9 +3166,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 129
+        "y": 135
       },
-      "id": 53,
+      "id": 54,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -3038,13 +3177,13 @@
     {
       "type": "row",
       "title": "Client errors",
-      "id": 54,
+      "id": 55,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 137
+        "y": 143
       },
       "panels": []
     },
@@ -3097,9 +3236,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 138
+        "y": 144
       },
-      "id": 55,
+      "id": 56,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -3154,9 +3293,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 138
+        "y": 144
       },
-      "id": 56,
+      "id": 57,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -3211,9 +3350,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 146
+        "y": 152
       },
-      "id": 57,
+      "id": 58,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -3267,9 +3406,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 146
+        "y": 152
       },
-      "id": 58,
+      "id": 59,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
