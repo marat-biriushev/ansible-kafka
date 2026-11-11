@@ -7,7 +7,7 @@
 # kafka-exporter. Thresholds follow section 8 of the TZ; they are starting
 # values, to be tuned on the baseline after go-live.
 # Runbooks: monitoring/RUNBOOK.md; runbook_url points at its copy in
-# Confluence (replace RUNBOOK_BASE_URL, see the README there).
+# Confluence (replace RUNBOOK_BASE_URL; sections are named after the Grafana rule uids).
 # Check: promtool check rules monitoring/kafka-alerts.yml
 ---
 groups:
@@ -42,7 +42,7 @@ groups:
         annotations:
           summary: "{{ $labels.cluster }}: {{ $value }} partitions without a leader"
           description: Writes and reads of these partitions have stopped.
-          runbook_url: RUNBOOK_BASE_URL#kafkaofflinepartitions
+          runbook_url: RUNBOOK_BASE_URL#offline
 
       - alert: KafkaActiveControllerCountNotOne
         expr: sum by (cluster) (kafka_controller_kafkacontroller_activecontrollercount{job=~"int-res-.+-kafka-jmx"}) != 1
@@ -51,7 +51,7 @@ groups:
         annotations:
           summary: "{{ $labels.cluster }}: {{ $value }} active controllers (expected 1)"
           description: No active controller, or split-brain.
-          runbook_url: RUNBOOK_BASE_URL#kafkaactivecontrollercountnotone
+          runbook_url: RUNBOOK_BASE_URL#controller
 
       - alert: KafkaUnderMinIsrPartitions
         expr: sum by (cluster, node) (kafka_server_replicamanager_underminisrpartitioncount{job=~"int-res-.+-kafka-jmx"}) > 0
@@ -60,7 +60,7 @@ groups:
         annotations:
           summary: "{{ $labels.node }}: {{ $value }} partitions below min.insync.replicas"
           description: Writes with acks=all to these partitions are rejected.
-          runbook_url: RUNBOOK_BASE_URL#kafkaunderminisrpartitions
+          runbook_url: RUNBOOK_BASE_URL#under-isr
 
       - alert: KafkaUnderReplicatedPartitions
         expr: sum by (cluster, node) (kafka_server_replicamanager_underreplicatedpartitions{job=~"int-res-.+-kafka-jmx"}) > 0
@@ -69,7 +69,7 @@ groups:
         annotations:
           summary: "{{ $labels.node }}: {{ $value }} under-replicated partitions"
           description: Replicas are behind (normal for a minute or two during a restart).
-          runbook_url: RUNBOOK_BASE_URL#kafkaunderreplicatedpartitions
+          runbook_url: RUNBOOK_BASE_URL#under-replicated
 
       - alert: KafkaUnderReplicatedPartitionsLong
         expr: sum by (cluster, node) (kafka_server_replicamanager_underreplicatedpartitions{job=~"int-res-.+-kafka-jmx"}) > 0
@@ -78,7 +78,7 @@ groups:
         annotations:
           summary: "{{ $labels.node }}: {{ $value }} under-replicated partitions for 5 minutes"
           description: Replicas are not catching up; one more failure can lose availability.
-          runbook_url: RUNBOOK_BASE_URL#kafkaunderreplicatedpartitions
+          runbook_url: RUNBOOK_BASE_URL#under-replicated
 
       - alert: KafkaIsrFlapping
         expr: |
@@ -90,7 +90,7 @@ groups:
         annotations:
           summary: "{{ $labels.node }}: {{ $value | humanize }} ISR shrinks/expands in 15 minutes"
           description: Replicas keep dropping out of the ISR and coming back; unstable network or an overloaded broker.
-          runbook_url: RUNBOOK_BASE_URL#kafkaisrflapping
+          runbook_url: RUNBOOK_BASE_URL#isr-flapping
 
       - alert: KafkaFencedBrokers
         expr: max by (cluster) (kafka_controller_kafkacontroller_fencedbrokercount{job=~"int-res-.+-kafka-jmx"}) > 0
@@ -99,7 +99,7 @@ groups:
         annotations:
           summary: "{{ $labels.cluster }}: {{ $value }} fenced brokers"
           description: A broker is registered but fenced by the controller (lost its session or is stuck).
-          runbook_url: RUNBOOK_BASE_URL#kafkafencedbrokers
+          runbook_url: RUNBOOK_BASE_URL#fenced
 
       - alert: KafkaBrokerDown
         expr: up{job=~"int-res-.+-kafka-jmx"} == 0
@@ -108,7 +108,7 @@ groups:
         annotations:
           summary: "{{ $labels.node }}: Kafka broker/controller does not answer"
           description: The JMX exporter runs inside the Kafka process, so this means Kafka is down (or port 7071 is blocked).
-          runbook_url: RUNBOOK_BASE_URL#kafkabrokerdown
+          runbook_url: RUNBOOK_BASE_URL#jmx-down
 
       - alert: KafkaRequestHandlerIdleLow
         expr: kafka_server_kafkarequesthandlerpool_requesthandleravgidlepercent{job=~"int-res-.+-kafka-jmx"} < 0.4
@@ -117,7 +117,7 @@ groups:
         annotations:
           summary: "{{ $labels.node }}: request handlers idle {{ $value | humanizePercentage }}"
           description: The broker is getting busy (idle below 40%).
-          runbook_url: RUNBOOK_BASE_URL#kafkarequesthandleridlelow
+          runbook_url: RUNBOOK_BASE_URL#handler-idle
 
       - alert: KafkaRequestHandlerIdleCritical
         expr: kafka_server_kafkarequesthandlerpool_requesthandleravgidlepercent{job=~"int-res-.+-kafka-jmx"} < 0.2
@@ -126,7 +126,7 @@ groups:
         annotations:
           summary: "{{ $labels.node }}: request handlers idle {{ $value | humanizePercentage }}"
           description: The broker is overloaded (idle below 20%).
-          runbook_url: RUNBOOK_BASE_URL#kafkarequesthandleridlelow
+          runbook_url: RUNBOOK_BASE_URL#handler-idle
 
       # "Above the baseline x2": p99 now against its own 7-day average. The
       # floor (50 ms Produce, 1000 ms Fetch, which long-polls up to 500 ms)
@@ -147,7 +147,7 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: "{{ $labels.cluster }}: {{ $labels.request }} p99 {{ $value | humanize }} ms, over twice the 7-day baseline"
-          runbook_url: RUNBOOK_BASE_URL#kafkarequestlatencyhigh
+          runbook_url: RUNBOOK_BASE_URL#request-latency
 
       - alert: KafkaProduceErrors
         expr: kafka:produce_success_ratio:rate5m < 0.999
@@ -155,7 +155,7 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: "{{ $labels.cluster }}: {{ $value | humanizePercentage }} of produce requests succeed"
-          runbook_url: RUNBOOK_BASE_URL#kafkaproduceerrors
+          runbook_url: RUNBOOK_BASE_URL#produce-errors
 
   # --- Hosts --------------------------------------------------------------
   - name: kafka-nodes
@@ -166,7 +166,7 @@ groups:
         labels: {severity: critical}
         annotations:
           summary: "{{ $labels.node }}: host does not answer (node_exporter)"
-          runbook_url: RUNBOOK_BASE_URL#kafkanodedown
+          runbook_url: RUNBOOK_BASE_URL#node-down
 
       - alert: KafkaDataDiskUsageHigh
         expr: |
@@ -176,7 +176,7 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: "{{ $labels.node }}: /data is {{ $value | humanizePercentage }} full"
-          runbook_url: RUNBOOK_BASE_URL#kafkadatadiskusage
+          runbook_url: RUNBOOK_BASE_URL#disk-usage
 
       - alert: KafkaDataDiskUsageCritical
         expr: |
@@ -187,7 +187,7 @@ groups:
         annotations:
           summary: "{{ $labels.node }}: /data is {{ $value | humanizePercentage }} full"
           description: At 100% the broker stops.
-          runbook_url: RUNBOOK_BASE_URL#kafkadatadiskusage
+          runbook_url: RUNBOOK_BASE_URL#disk-usage
 
       # Written by the kafka_tls role into the node_exporter textfile directory
       - alert: KafkaCertificateExpiresSoon
@@ -195,14 +195,14 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: "{{ $labels.node }}: broker certificate expires in {{ $value | humanizeDuration }}"
-          runbook_url: RUNBOOK_BASE_URL#kafkacertificateexpires
+          runbook_url: RUNBOOK_BASE_URL#cert-expiry
 
       - alert: KafkaCertificateExpiresVerySoon
         expr: (kafka_tls_certificate_not_after_seconds{job=~"int-res-.+-kafka-node"} - time()) < 7 * 86400
         labels: {severity: critical}
         annotations:
           summary: "{{ $labels.node }}: broker certificate expires in {{ $value | humanizeDuration }}"
-          runbook_url: RUNBOOK_BASE_URL#kafkacertificateexpires
+          runbook_url: RUNBOOK_BASE_URL#cert-expiry
 
   # --- Consumers and services ---------------------------------------------
   - name: kafka-clients
@@ -217,7 +217,7 @@ groups:
         labels: {severity: critical}
         annotations:
           summary: "{{ $labels.cluster }}: group {{ $labels.consumergroup }} on {{ $labels.topic }} keeps falling behind (lag {{ $value | humanize }})"
-          runbook_url: RUNBOOK_BASE_URL#kafkaconsumerlag
+          runbook_url: RUNBOOK_BASE_URL#consumer-lag
 
       # "Above the SLO threshold": one starting value for all groups; give
       # key groups their own rule once their SLO is agreed
@@ -227,7 +227,7 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: "{{ $labels.cluster }}: group {{ $labels.consumergroup }} on {{ $labels.topic }} lag {{ $value | humanize }} messages"
-          runbook_url: RUNBOOK_BASE_URL#kafkaconsumerlag
+          runbook_url: RUNBOOK_BASE_URL#consumer-lag
 
       - alert: KafkaExporterDown
         expr: up{job=~"int-res-.+-kafka-lag"} == 0
@@ -235,7 +235,7 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: "{{ $labels.node }}: kafka-exporter down, consumer lag is not monitored"
-          runbook_url: RUNBOOK_BASE_URL#kafkaexporterdown
+          runbook_url: RUNBOOK_BASE_URL#lag-target
 
       - alert: SchemaRegistryDown
         expr: up{job=~"int-res-.+-schema-registry"} == 0
@@ -243,7 +243,7 @@ groups:
         labels: {severity: critical}
         annotations:
           summary: "{{ $labels.cluster }}: Schema Registry does not answer"
-          runbook_url: RUNBOOK_BASE_URL#schemaregistrydown
+          runbook_url: RUNBOOK_BASE_URL#schema-target
 
       - alert: KafkaConnectDown
         expr: up{job=~"int-res-.+-kafka-connect"} == 0
@@ -251,7 +251,7 @@ groups:
         labels: {severity: critical}
         annotations:
           summary: "{{ $labels.cluster }}: Kafka Connect worker does not answer"
-          runbook_url: RUNBOOK_BASE_URL#kafkaconnectdown
+          runbook_url: RUNBOOK_BASE_URL#connect-target
 
       - alert: KafkaConnectConnectorFailed
         expr: kafka_connect_connector_status{job=~"int-res-.+-kafka-connect", status="failed"} == 1
@@ -259,7 +259,7 @@ groups:
         labels: {severity: critical}
         annotations:
           summary: "{{ $labels.cluster }}: connector {{ $labels.connector }} is FAILED"
-          runbook_url: RUNBOOK_BASE_URL#kafkaconnectfailed
+          runbook_url: RUNBOOK_BASE_URL#connector-failed
 
       - alert: KafkaConnectTaskFailed
         expr: kafka_connect_worker_connector_connector_failed_task_count{job=~"int-res-.+-kafka-connect"} > 0
@@ -267,11 +267,11 @@ groups:
         labels: {severity: critical}
         annotations:
           summary: "{{ $labels.cluster }}: connector {{ $labels.connector }} has {{ $value }} failed tasks"
-          runbook_url: RUNBOOK_BASE_URL#kafkaconnectfailed
+          runbook_url: RUNBOOK_BASE_URL#connector-failed
 
       - alert: KafkaConnectRecordErrors
         expr: increase(kafka_connect_task_error_total_record_errors{job=~"int-res-.+-kafka-connect"}[10m]) > 0
         labels: {severity: warning}
         annotations:
           summary: "{{ $labels.cluster }}: connector {{ $labels.connector }} task {{ $labels.task }} had record errors in 10 minutes"
-          runbook_url: RUNBOOK_BASE_URL#kafkaconnectrecorderrors
+          runbook_url: RUNBOOK_BASE_URL#connect-errors

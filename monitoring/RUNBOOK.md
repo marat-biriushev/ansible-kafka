@@ -1,15 +1,15 @@
 # Kafka runbook
 
-One section per alert in `kafka-alerts.yml`; each alert's `runbook_url`
-points at its heading. Publish this page in Confluence and replace
-`RUNBOOK_BASE_URL` in the rules with its address:
+One section per alert rule. Section names are the Grafana rule uids
+without the environment prefix: Grafana rule `int-kafka-test-jmx-down` and
+`int-kafka-prod-jmx-down` both point at section `jmx-down`. Each section
+also names the matching alert in `kafka-alerts.yml` (Prometheus/vmalert).
 
-```bash
-sed -i 's#RUNBOOK_BASE_URL#https://space.ipotekabank.uz/<page>#' monitoring/kafka-alerts.yml
-```
-
-(Confluence makes its own anchors from headings; check one link after
-publishing.)
+Publish this page in Confluence and set each rule's **Runbook URL** to
+the page address plus the section anchor. Confluence Data Center builds
+the anchor from the page title and the heading with spaces removed: page
+"Kafka Runbook", heading `jmx-down` gives `#KafkaRunbook-jmx-down`. Click
+one heading link on the published page to confirm the format.
 
 Shell setup on any broker, used below:
 
@@ -18,181 +18,338 @@ K=/opt/kafka/bin; C=/etc/kafka/admin.properties; B=$(hostname -f):9091
 ```
 
 Common checks: `systemctl status kafka`, `journalctl -u kafka -n 100`,
-`/var/log/kafka/server.log`, `df -h /data`.
+`/var/log/kafka/server.log`, `df -h /data`. Services VM (kafkasvc01):
+`docker ps`, `docker logs <container> --tail 100`.
 
-## KafkaOfflinePartitions
+| Section | Grafana rule (uid without `int-kafka-<env>-`) | Prometheus alert |
+|---|---|---|
+| [node-down](#node-down) | node-down, node-count | KafkaNodeDown |
+| [jmx-down](#jmx-down) | jmx-down, jmx-count | KafkaBrokerDown |
+| [controller](#controller) | controller | KafkaActiveControllerCountNotOne |
+| [offline](#offline) | offline | KafkaOfflinePartitions |
+| [under-isr](#under-isr) | under-isr | KafkaUnderMinIsrPartitions |
+| [under-replicated](#under-replicated) | under-replicated | KafkaUnderReplicatedPartitions(Long) |
+| [fenced](#fenced) | fenced | KafkaFencedBrokers |
+| [isr-flapping](#isr-flapping) | (to add) | KafkaIsrFlapping |
+| [handler-idle](#handler-idle) | handler-idle | KafkaRequestHandlerIdleLow / Critical |
+| [request-latency](#request-latency) | (to add) | KafkaRequestLatencyHigh |
+| [produce-errors](#produce-errors) | produce-errors | KafkaProduceErrors |
+| [fetch-errors](#fetch-errors) | fetch-errors | — |
+| [heap](#heap) | heap | — |
+| [disk-usage](#disk-usage) | disk-warning, disk-critical | KafkaDataDiskUsageHigh / Critical |
+| [disk-readonly](#disk-readonly) | disk-readonly | — |
+| [disk-inodes](#disk-inodes) | disk-inodes | — |
+| [data-mount](#data-mount) | data-mount | — |
+| [cpu](#cpu) | cpu | — |
+| [memory](#memory) | memory | — |
+| [net-errors](#net-errors) | net-errors | — |
+| [cert-expiry](#cert-expiry) | (to add) | KafkaCertificateExpires(Very)Soon |
+| [consumer-lag](#consumer-lag) | (to add) | KafkaConsumerLagGrowing / High |
+| [lag-target](#lag-target) | lag-target | KafkaExporterDown |
+| [schema-target](#schema-target) | schema-target | SchemaRegistryDown |
+| [connect-target](#connect-target) | connect-target | KafkaConnectDown |
+| [connector-failed](#connector-failed) | connector-failed, task-failed | KafkaConnectConnectorFailed / TaskFailed |
+| [connect-errors](#connect-errors) | connect-errors | KafkaConnectRecordErrors |
 
-**Meaning:** partitions have no leader; their producers and consumers are down.
-Usually two or more brokers are down at once (RF 3, min ISR 2).
+## node-down
+
+**Meaning:** node_exporter (port 9100) does not answer, or fewer hosts than
+expected are scraped (4 per cluster: kafka01-03 and kafkasvc01). The host is
+down, node_exporter is stopped, or 9100 is blocked from Prometheus.
+
+**Check:** ping / SSH the host named in the `node` label;
+`systemctl status node_exporter`; `curl -s localhost:9100/metrics | head`.
+**Act:** bring the host or `node_exporter` back (`systemctl start node_exporter`).
+For a broker host also see [jmx-down](#jmx-down).
+
+## jmx-down
+
+**Meaning:** the broker's JMX exporter (port 7071) does not answer, or fewer
+than 3 brokers are scraped. The exporter runs **inside the Kafka process**
+(javaagent), so this means the Kafka broker itself is down, or port 7071 is
+blocked from Prometheus.
+
+**Check:** `systemctl status kafka`, `journalctl -u kafka -n 100`,
+`curl -s localhost:7071/metrics | head` on the node.
+**Act:** `systemctl start kafka`. If it does not start, read
+`/var/log/kafka/server.log`: full disk, `meta.properties` mismatch,
+certificate problems. With one broker down the cluster keeps working (RF 3,
+min ISR 2): fix it today, not in a panic. Two brokers down: see
+[offline](#offline).
+
+## controller
+
+**Meaning:** the cluster has no active controller (0) or more than one.
+0 means the KRaft quorum is lost (2 of 3 nodes down) or no broker metrics
+are scraped; 2+ should not happen with KRaft (check clocks and network).
+
+**Check:**
+```bash
+$K/kafka-metadata-quorum.sh --bootstrap-server $B --command-config $C describe --status
+```
+`LeaderId`, `CurrentVoters`; `chronyc tracking` on all three nodes.
+**Act:** bring the brokers back; the quorum needs 2 of 3 controllers.
+
+## offline
+
+**Meaning:** partitions without a leader: writes and reads of them have
+stopped. Usually two or more brokers are down.
 
 **Check:**
 ```bash
 $K/kafka-topics.sh --bootstrap-server $B --command-config $C --describe --unavailable-partitions
+```
+**Act:** start the stopped brokers one at a time. Unclean leader election is
+off on purpose: do not turn it on, it loses data.
+
+## under-isr
+
+**Meaning:** partitions with fewer than 2 in-sync replicas: producers with
+`acks=all` get `NOT_ENOUGH_REPLICAS`, the applications cannot write.
+
+**Check:**
+```bash
+$K/kafka-topics.sh --bootstrap-server $B --command-config $C --describe --under-min-isr-partitions
+```
+Which broker is missing from the ISR.
+**Act:** bring that broker back, see [jmx-down](#jmx-down).
+
+## under-replicated
+
+**Meaning:** some replicas are behind the leader. A minute or two during a
+broker restart or a rolling restart is normal (warning); 5 minutes and more
+is not (critical): one more failure can stop writes.
+
+**Check:**
+```bash
+$K/kafka-topics.sh --bootstrap-server $B --command-config $C --describe --under-replicated-partitions
+```
+The broker missing from `Isr`, its disk (`df`, `iostat -x 5`), network, GC
+pauses in `server.log`.
+**Act:** a broker that was down catches up by itself. If it does not: its
+disk or network, or it is overloaded ([handler-idle](#handler-idle)).
+
+## fenced
+
+**Meaning:** the controller has fenced a broker: it stopped sending
+heartbeats (long GC pause, network, overload). A fenced broker serves no
+partitions.
+
+**Check:**
+```bash
 $K/kafka-metadata-quorum.sh --bootstrap-server $B --command-config $C describe --replication
 ```
-**Act:** start the stopped brokers (`systemctl start kafka`), one at a time.
-Unclean leader election is off on purpose: do not turn it on, it loses data.
+`server.log` on that broker.
+**Act:** usually it unfences itself within seconds; if not,
+`systemctl restart kafka` on it.
 
-## KafkaActiveControllerCountNotOne
+## isr-flapping
 
-**Meaning:** 0 = no controller leader (quorum lost: 2 of 3 nodes down);
-2+ = split-brain (should not happen with KRaft; check clocks and network).
+**Meaning:** replicas keep leaving and rejoining the ISR (more than 10
+shrinks/expands in 15 minutes on a broker): unstable network between the
+brokers, GC pauses, or a slow disk.
 
-**Check:** `kafka-metadata-quorum.sh ... describe --status` (LeaderId, voters),
-`chronyc tracking` on all nodes.
-**Act:** bring the nodes back; a quorum needs 2 of 3 controllers.
+**Check:** "Shrinking ISR" / "Expanding ISR" in `server.log` of the node in
+the alert; network errors ([net-errors](#net-errors)); disk latency.
+**Act:** remove the cause. Raising `replica.lag.time.max.ms` hides it, it
+does not fix it.
 
-## KafkaUnderMinIsrPartitions
+## handler-idle
 
-**Meaning:** fewer than 2 in-sync replicas; producers with `acks=all` get
-`NOT_ENOUGH_REPLICAS`.
+**Meaning:** the broker's request handler threads are busy: idle below 40%
+(warning) or 20% (critical). Latency grows and clients time out.
 
-**Check:** `kafka-topics.sh ... --describe --under-min-isr-partitions`; which
-broker is missing from the ISR.
-**Act:** fix or restart that broker; see KafkaBrokerDown.
+**Check:** dashboard "Requests per second by type", which topics grew
+("Messages in per topic"), CPU and disk of the node.
+**Act:** find the client or topic that grew and its owner; spread
+partitions or add quotas. A one-off batch load may only need waiting.
 
-## KafkaUnderReplicatedPartitions
+## request-latency
 
-**Meaning:** some replicas lag behind. A minute or two during a restart or
-rolling restart is normal (warning); 5 minutes and more is critical.
-
-**Check:** `kafka-topics.sh ... --describe --under-replicated-partitions`, the
-broker missing from the ISR, its disk, network and GC (`server.log`).
-**Act:** a broker that was down catches up by itself; if it does not, look at
-its disk (`df`, `iostat`), network and `RequestHandlerAvgIdlePercent`.
-
-## KafkaIsrFlapping
-
-**Meaning:** replicas keep leaving and rejoining the ISR: unstable network or
-an overloaded broker (GC pauses, slow disk).
-
-**Check:** which node; its `server.log` ("Shrinking ISR"), GC, network
-errors between brokers, disk latency.
-**Act:** remove the cause; `replica.lag.time.max.ms` is not the fix.
-
-## KafkaFencedBrokers
-
-**Meaning:** a broker lost its registration with the controller (heartbeats
-missed: long GC, network, overloaded).
-
-**Check:** `kafka-metadata-quorum.sh ... describe --replication`, `server.log`
-on the fenced broker.
-**Act:** usually it unfences itself; if not, restart it (`systemctl restart kafka`).
-
-## KafkaBrokerDown
-
-**Meaning:** the JMX exporter (inside the Kafka process, port 7071) does not
-answer: Kafka is down, or 7071 is blocked from the monitoring host.
-
-**Check:** `systemctl status kafka`, `journalctl -u kafka -n 100`,
-`curl -s localhost:7071/metrics | head` on the node.
-**Act:** start it; if it fails to start, read `server.log` (disk full,
-`meta.properties` mismatch, certificate problems). One node down: the cluster
-keeps working, fix it without hurry but today.
-
-## KafkaRequestHandlerIdleLow
-
-**Meaning:** request handler threads are busy: below 40% idle a warning, below
-20% critical (the broker is overloaded and latency grows).
-
-**Check:** request rate per type, which clients/topics grew, disk and CPU.
-**Act:** find the client that grew (Kafka UI, `kafka_server_brokertopicmetrics_*`);
-add quotas or capacity.
-
-## KafkaRequestLatencyHigh
-
-**Meaning:** broker-side p99 for Produce or FetchConsumer is above twice its
+**Meaning:** broker-side p99 of Produce or FetchConsumer is above twice its
 7-day average.
 
-**Check:** the same node's disk, GC, network, `RequestHandlerAvgIdlePercent`,
+**Check:** the same node's disk, GC, network, [handler-idle](#handler-idle),
 under-replicated partitions.
-**Act:** as for KafkaRequestHandlerIdleLow; after a planned load change,
-the baseline follows within days.
+**Act:** as for handler-idle. After a planned load change the baseline
+follows within days.
 
-## KafkaProduceErrors
+## produce-errors
 
-**Meaning:** under 99.9% of produce requests succeed over 5 minutes.
+**Meaning:** brokers answer produce requests with errors for 5 minutes.
+During a broker restart a short burst (leader moves) is normal.
 
-**Check:** under-min-ISR and offline partitions, authorization errors in
-`/var/log/kafka/kafka-authorizer.log`, message size errors in `server.log`.
-**Act:** fix the cluster side, or tell the client team (ACL, message too large).
+**Check:** [under-isr](#under-isr) and [offline](#offline) first; then
+`/var/log/kafka/kafka-authorizer.log` (denied writes: missing ACL),
+`RecordTooLargeException` / message size in `server.log` and the dashboard
+"Rejected bytes per topic".
+**Act:** fix the cluster side, or tell the client team (missing ACL,
+messages over 1 MB).
 
-## KafkaNodeDown
+## fetch-errors
 
-**Meaning:** node_exporter (9100) does not answer: the host is down, or 9100
-is blocked.
+**Meaning:** brokers answer fetch requests with errors for 5 minutes:
+consumers or followers ask for offsets that no longer exist, partitions that
+moved, or topics they may not read.
 
-**Check:** ping/SSH the host; `systemctl status node_exporter`.
-**Act:** bring the host back; for a broker also see KafkaBrokerDown.
+**Check:** `kafka-authorizer.log` (denied reads), `server.log`
+("OffsetOutOfRange", "NotLeaderOrFollower"); right after a restart it clears
+by itself.
+**Act:** tell the client team (missing ACL, wrong offsets); if it follows a
+broker problem, fix that.
 
-## KafkaDataDiskUsage
+## heap
 
-**Meaning:** `/data` above 75% (warning) or 85% (critical). At 100% the broker
-stops.
+**Meaning:** a broker's JVM heap is above 90% for 10 minutes. G1 normally
+fills the heap before collecting, so look at the trend after GC, not one
+peak.
 
-**Check:** `df -h /data`, the largest topics (Kafka UI or
-`kafka_log_log_size_bytes`).
-**Act:** lower `retention.ms`/`retention.bytes` on the large topics, delete
-test topics, or grow the disk. Never delete files in `/data/kafka` by hand.
+**Check:** dashboard "JVM heap used / max" and "GC time" for the node; long
+GC pauses in `server.log`.
+**Act:** if the heap stays full after GC and GC time grows, the heap is too
+small for the load: raise `kafka_heap` in the inventory and run
+`playbooks/kafka.yml` (rolling restart).
 
-## KafkaCertificateExpires
+## disk-usage
 
-**Meaning:** a broker certificate expires in under 30 days (warning) or 7 days
-(critical). Expired certificates stop inter-broker traffic and clients.
+**Meaning:** a filesystem is above 80% / 90%; for the Kafka data disk
+`/data`, above 75% (warning) / 85% (critical). At 100% the broker stops.
 
-**Act:** self-signed: rerun `playbooks/kafka.yml` (certificates within 30 days
-of expiry are reissued and the brokers restarted one by one). Bank CA: put the
-new files into `certs/<env>/` and run `playbooks/kafka.yml`.
+**Check:** `df -h /data`; the largest topics (dashboard "Size on disk per
+topic", or Kafka UI).
+**Act:** lower `retention.ms` / `retention.bytes` on the large topics,
+delete test topics, or grow the disk. **Never delete files in `/data/kafka`
+by hand.** Other filesystems: logs (`/var/log/kafka` rotates after 14 days),
+Docker images on kafkasvc01 (`docker image prune`).
 
-## KafkaConsumerLag
+## disk-readonly
 
-**Meaning:** a consumer group keeps falling behind for 15 minutes (critical),
-or its lag is above the threshold (warning; one default for all groups,
-key groups get their own once their SLO is agreed).
+**Meaning:** a filesystem went read-only, usually after disk or storage
+errors. On `/data` the broker stops writing.
 
-**Check:** the group in Kafka UI: members present? committing offsets?
-**Act:** tell the owning team; their consumer is stopped, failing on a message,
-or too slow (more partitions/consumers).
+**Check:** `dmesg -T | tail -50`, `mount | grep ' ro,'`.
+**Act:** storage / virtualization team; the broker must be stopped
+(`systemctl stop kafka`) before any fsck. The cluster keeps working with
+two brokers.
 
-## KafkaExporterDown
+## disk-inodes
 
-**Meaning:** kafka-exporter on kafkasvc01 (9308) does not answer; consumer lag
-is not monitored.
+**Meaning:** a filesystem has used more than 90% of its inodes: no new files
+even with free space. Kafka creates files per log segment.
 
-**Check/Act:** `docker ps` / `docker logs kafka-exporter` on kafkasvc01;
+**Check:** `df -i`; on `/data`, the topics with very many small segments.
+**Act:** delete unneeded topics; review `segment.bytes` / `segment.ms` of
+topics with tiny segments.
+
+## data-mount
+
+**Meaning:** fewer than three brokers report a `/data` filesystem: the data
+disk is not mounted (Kafka would then write to the OS disk), or node_exporter
+is not scraped.
+
+**Check:** `findmnt /data` on each broker.
+**Act:** do **not** start Kafka on a broker without `/data` mounted. Mount it
+(`mount /data`, fstab entry), then start Kafka.
+
+## cpu
+
+**Meaning:** a host uses more than 90% CPU for 10 minutes.
+
+**Check:** `top`; for a broker also [handler-idle](#handler-idle) and TLS
+load (many new client connections).
+**Act:** find the client that grew; spread the load or add CPU.
+
+## memory
+
+**Meaning:** less than 10% of memory is available for 10 minutes. On a
+broker the page cache is reclaimable and counted as available, so this
+means real memory pressure.
+
+**Check:** `free -m`, `ps aux --sort=-rss | head`.
+**Act:** a process other than Kafka using memory; on kafkasvc01 one of the
+containers (`docker stats`).
+
+## net-errors
+
+**Meaning:** more than one network receive/transmit error per second on a
+host for 5 minutes.
+
+**Check:** `ip -s link`, `ethtool -S <iface>` on the host.
+**Act:** network / virtualization team; it often explains
+[isr-flapping](#isr-flapping) and [under-replicated](#under-replicated).
+
+## cert-expiry
+
+**Meaning:** a broker certificate expires in under 30 days (warning) or 7
+days (critical). An expired certificate stops inter-broker traffic and
+client connections.
+
+**Act:** self-signed CA (TEST and PROD now): run `playbooks/kafka.yml`; it
+reissues certificates that expire within 30 days and restarts the brokers
+one by one. Bank CA: put the new files into `certs/<env>/` and run
+`playbooks/kafka.yml`.
+
+## consumer-lag
+
+**Meaning:** a consumer group keeps falling behind for 15 minutes
+(critical), or its lag is above the threshold (warning; one starting value
+for all groups until the key groups have an agreed SLO).
+
+**Check:** the group in Kafka UI or Redpanda Console: does it have members?
+are offsets committed? Dashboard "Lag per group and topic" and "Consumption
+rate per group".
+**Act:** tell the team that owns the group: the consumer is stopped, stuck
+on a message, or too slow (more partitions / consumers).
+
+## lag-target
+
+**Meaning:** kafka-exporter on kafkasvc01 (port 9308) does not answer:
+consumer lag is not monitored.
+
+**Check / act:** on kafkasvc01 `docker logs kafka-exporter --tail 50`;
 `docker compose --project-directory /opt/kafka-exporter up -d`.
 
-## SchemaRegistryDown
+## schema-target
 
-**Meaning:** Schema Registry (8081, metrics 7071) on kafkasvc01 does not
-answer; producers/consumers with Avro/Protobuf schemas fail.
+**Meaning:** Schema Registry metrics (kafkasvc01 port 7071) do not answer:
+Schema Registry is most likely down, and producers/consumers using
+Avro/Protobuf schemas fail.
 
-**Check/Act:** `docker logs schema-registry --tail 100`;
+**Check / act:** `curl -s localhost:8081/subjects` on kafkasvc01;
+`docker logs schema-registry --tail 100`;
 `docker compose --project-directory /opt/schema-registry up -d`.
 
-## KafkaConnectDown
+## connect-target
 
-**Meaning:** the Kafka Connect worker (8083, metrics 7072) does not answer;
-all connectors are stopped.
+**Meaning:** Kafka Connect metrics (kafkasvc01 port 7072) do not answer: the
+Connect worker is most likely down and all connectors are stopped.
 
-**Check/Act:** `docker logs kafka-connect --tail 100`;
+**Check / act:** `curl -s localhost:8083/` on kafkasvc01;
+`docker logs kafka-connect --tail 100`;
 `docker compose --project-directory /opt/kafka-connect up -d`. Connectors
 resume from their stored offsets.
 
-## KafkaConnectFailed
+## connector-failed
 
-**Meaning:** a connector or one of its tasks is FAILED.
+**Meaning:** a connector or one of its tasks is FAILED (label `connector`).
 
-**Check:** `curl -s localhost:8083/connectors/<name>/status` on kafkasvc01 (the
-trace says why: database unreachable, credentials, schema change).
+**Check:**
+```bash
+curl -s localhost:8083/connectors/<name>/status | python3 -m json.tool
+```
+on kafkasvc01: the `trace` says why (database unreachable, credentials,
+schema change, missing ACL).
 **Act:** fix the cause, then
-`curl -X POST 'localhost:8083/connectors/<name>/restart?includeTasks=true&onlyFailed=true'`.
+`curl -X POST 'localhost:8083/connectors/<name>/restart?includeTasks=true&onlyFailed=true'`
+(or Restart in Kafka UI / Redpanda Console).
 
-## KafkaConnectRecordErrors
+## connect-errors
 
-**Meaning:** a task skipped or failed records in the last 10 minutes
-(conversion or transform errors).
+**Meaning:** a connector's tasks failed to convert or transform records in
+the last 10 minutes; depending on `errors.tolerance` they were skipped or
+sent to the dead letter queue.
 
-**Check:** the connector's error settings (`errors.tolerance`, dead letter
-queue topic) and its logs.
-**Act:** tell the owning team; fix the data or the connector config.
+**Check:** the connector's `errors.*` settings and its log lines
+(`docker logs kafka-connect --since 30m | grep <name>`).
+**Act:** tell the team that owns the connector; fix the data or the
+connector config.
